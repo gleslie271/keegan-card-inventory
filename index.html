@@ -150,6 +150,21 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 .notice { font-size: 13px; padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--line); color: var(--muted); }
 .notice.warn { color: var(--warn); border-color: currentColor; }
 
+body[data-view="stock"] main .wrap, body[data-view="stock"] header.top .wrap { max-width: 1000px; }
+@media (min-width: 700px) { .sgrid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important; gap: 16px 14px !important; } }
+.sgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px 10px; }
+.tile { display: grid; gap: 3px; align-content: start; text-align: left; background: none; border: 0; padding: 0; cursor: pointer; color: var(--fg); min-width: 0; font: inherit; }
+.tile .pic { position: relative; aspect-ratio: 63/88; border-radius: 6px; background: var(--surface-2); overflow: hidden; display: grid; place-items: center; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+.tile .pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+.tile .ph { font: 600 12px/1.3 var(--font-display); color: var(--muted); text-align: center; }
+.tile .lang { position: absolute; top: 4px; left: 4px; z-index: 2; }
+.tile .lang .badge { font-size: 10px; padding: 1px 6px; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.tile .qty { position: absolute; top: 4px; right: 4px; z-index: 2; background: var(--ink); color: var(--ink-fg); font: 700 12px/1 var(--font-display); padding: 4px 7px; border-radius: 999px; }
+.tile .nm { font-weight: 700; font-size: 13px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 3px; }
+.tile .meta { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .px { display: grid; gap: 1px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.tile .px .muted { font-size: 11px; white-space: nowrap; }
+.tile:active .pic { transform: scale(.98); }
 .list { display: grid; gap: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
 .item { display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--line); background: transparent; border-left: 0; border-right: 0; border-bottom: 0; text-align: left; width: 100%; cursor: pointer; color: var(--fg); }
 .item:first-child { border-top: 0; }
@@ -472,6 +487,7 @@ $("toastUndo").addEventListener("click", function () { if (toastUndoFn) toastUnd
 /* ---------- tabs ---------- */
 var VIEWS = ["lookup", "stock", "log", "reports", "settings"];
 function show(view) {
+  document.body.setAttribute("data-view", view);
   VIEWS.forEach(function (v) { $("v-" + v).hidden = v !== view; });
   document.querySelectorAll("nav.tabs button").forEach(function (b) {
     if (b.dataset.tab === view) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
@@ -965,13 +981,15 @@ function renderStock() {
     $("stockList").innerHTML = '<div class="notice">' + (q ? "No cards in stock match “" + esc(q) + "”." : "No cards in stock yet. Look up a card and tap Buy to add it.") + "</div>";
     return;
   }
-  var html = '<div class="list">';
+  var html = '<div class="sgrid">';
   items.forEach(function (it) {
-    html += '<button type="button" class="item" data-key="' + esc(it.key) + '">' +
-      '<span class="thumb">' + (it.image ? '<img alt="" loading="lazy" src="' + esc(imgUrl(it.image)) + '" onerror="this.remove()">' : "") + "</span>" +
-      '<span class="t"><b>' + esc(it.name) + '</b><span class="small muted">' + langBadge(it.lang) + " " + esc(it.setId) + " #" + esc(it.localId) + " · " + esc(it.variantLabel) + " · " + esc(it.cond) + "</span>" +
-      '<span class="small muted" style="display:block">' + (it.firstIn ? days(it.firstIn) + " days in stock" : "") + "</span></span>" +
-      '<span class="r"><b>×' + it.qty + '</b><br><span class="small muted">cost ' + money(it.cost / it.qty) + "</span><br><span class=\"small\">mkt " + money(it.market) + "</span></span></button>";
+    html += '<button type="button" class="tile" data-key="' + esc(it.key) + '" title="' + esc(it.name + " · " + it.setId + " #" + it.localId) + '">' +
+      '<span class="pic">' + (it.image ? '<img alt="" loading="lazy" src="' + esc(imgUrl(it.image)) + '" onerror="this.remove()">' : "") +
+      '<span class="ph">' + esc(it.setId) + "<br>#" + esc(it.localId) + "</span>" +
+      '<span class="lang">' + langBadge(it.lang) + "</span>" + (it.qty > 1 ? '<span class="qty">×' + it.qty + "</span>" : "") + "</span>" +
+      '<span class="nm">' + esc(it.name) + "</span>" +
+      '<span class="meta">' + esc(it.setId) + " #" + esc(it.localId) + " · " + esc(it.cond) + (it.variantLabel && it.variantLabel !== "Normal" ? " · " + esc(it.variantLabel) : "") + "</span>" +
+      '<span class="px"><b>' + (it.market != null ? money(it.market) : "no price") + '</b><span class="muted">paid ' + money(it.cost / it.qty) + "</span></span></button>";
   });
   $("stockList").innerHTML = html + "</div>";
   $("stockList").querySelectorAll("[data-key]").forEach(function (b) { b.addEventListener("click", function () { openItem(S.items[b.dataset.key]); }); });
