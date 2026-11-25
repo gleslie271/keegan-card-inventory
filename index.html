@@ -619,7 +619,7 @@ function toModel(lang, card, set) {
     if (!vs.length) vs.push({ type: "normal", variantId: "normal" });
   }
   var variants = vs.map(function (v, i) {
-    return { id: v.variantId && v.variantId !== "generated" ? v.variantId : (v.type || "normal") + i, label: variantLabel(v), price: priceFor(v, card) };
+    return { id: v.variantId && v.variantId !== "generated" ? v.variantId : (v.type || "normal") + i, label: variantLabel(v), price: lang.indexOf("zh") === 0 ? null : priceFor(v, card) }; // Chinese: TCGdex's Cardmarket figure is not the Chinese printing, so price from the English card instead
   });
   var setObj = card.set || {};
   return {
