@@ -71,7 +71,7 @@ h3 { font: 600 13px/1.2 var(--font-body); margin: 0; text-transform: uppercase; 
 .num { font-variant-numeric: tabular-nums; }
 
 label.f { display: grid; gap: 4px; font-size: 13px; color: var(--muted); min-width: 0; }
-input[type=text], input[type=number], input[type=search], select {
+input[type=text], input[type=number], input[type=search], input[type=password], input[type=email], input[type=url], select {
   width: 100%; min-width: 0; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--fg); font-size: 16px;
 }
 input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -237,6 +237,7 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
     </div>
     <button class="btn scanbtn" type="button" id="scanBtn"><svg viewBox="0 0 24 24"><path d="M4 8.5V7a2 2 0 0 1 2-2h2l1.5-2h5L16 5h2a2 2 0 0 1 2 2v1.5M4 11v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><circle cx="12" cy="12.5" r="3.5"/></svg>Scan a card with the camera</button>
     <input type="file" id="scanFile" accept="image/*" capture="environment" hidden>
+    <input type="file" id="photoFile" accept="image/*" capture="environment" hidden>
     <div id="scanStatus" hidden></div>
     <div class="row">
       <button class="btn primary" type="submit" id="findBtn">Find card</button>
@@ -293,6 +294,7 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
         <input type="number" id="setPct" min="1" max="100" step="1">
       </label>
     </div>
+    <div class="panel" id="syncPanel"></div>
     <div class="panel">
       <h3>Photo scanning</h3>
       <div class="small muted">Scanning sends the card photo to Claude, which reads the set code, number and language. It needs a Claude API key from console.anthropic.com. API use is billed there per photo, separately from any Claude subscription, and costs about a cent or less per scan. Set a monthly spending limit in the Console to be safe.</div>
@@ -328,7 +330,7 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
     </div>
     <div class="panel">
       <h3>Backup</h3>
-      <div class="small muted">Everything is saved in this browser on this device only. The spreadsheet has every buy and sale, your stock and your shows, for Excel or Google Sheets. The backup is for restoring the app on another phone.</div>
+      <div class="small muted">Records are saved on this device, and online too when sync is on. The spreadsheet has every buy and sale, your stock and your shows, for Excel or Google Sheets. The backup is for restoring the app on another phone.</div>
       <div class="row">
         <button class="btn" type="button" id="xlsxBtn">Download spreadsheet</button>
         <button class="btn" type="button" id="exportBtn">Download backup</button>
@@ -337,7 +339,7 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
       </div>
       <button class="btn danger" type="button" id="resetBtn">Erase all data</button>
       <div class="small" id="resetConfirm" hidden>
-        <div class="notice warn">This deletes every card and every buy and sale on this device. It can't be undone unless you have a backup.</div>
+        <div class="notice warn">This deletes every card and every buy and sale on this device, and on every synced device too if sync is on. It can't be undone unless you have a backup.</div>
         <div class="row" style="margin-top:8px"><button class="btn danger" type="button" id="resetYes">Yes, erase everything</button><button class="btn" type="button" id="resetNo">Keep my data</button></div>
       </div>
     </div>
@@ -441,6 +443,7 @@ var S = load();
 function save() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); }
   catch (e) { toast("Couldn't save on this device. Download a backup from Settings."); }
+  if (typeof scheduleSync === "function") scheduleSync();
 }
 
 /* ---------- helpers ---------- */
@@ -718,6 +721,8 @@ function openCard(model, preselect) {
     vIdx = stocked >= 0 ? stocked : (priced >= 0 ? priced : 0);
   }
   current = { model: model, variantIdx: vIdx, cond: (preselect && preselect.cond) || "NM", qty: 1, dirty: { buy: false, sell: false } };
+  if (pendingScanPhoto && Date.now() - pendingScanPhoto.at < 180000) current.photoId = pendingScanPhoto.id;
+  pendingScanPhoto = null;
   renderCard();
   if (!model.localName) englishName(model).then(function (en) { if (en && current && current.model === model) { model.enName = en; renderLinks(); } });
 }
@@ -732,12 +737,14 @@ function effMarket() {
 
 function renderCard() {
   var m = current.model, v = m.variants[current.variantIdx], L = LANGS[m.lang];
-  var art = m.image ? '<img alt="" src="' + esc(imgUrl(m.image)) + '" onerror="this.remove()">' : "No picture";
+  var ph = photoFor(m);
+  var art = ph ? '<img alt="Your photo" data-photo="' + esc(ph) + '">' : m.image ? '<img alt="" src="' + esc(imgUrl(m.image)) + '" onerror="this.remove()">' : "No picture";
   var html = '<div class="panel">' +
     '<div class="cardhead"><div class="art">' + art + '</div><div style="min-width:0">' +
     '<p class="name">' + esc(m.name) + "</p>" +
     '<div class="langline"><span class="badge big ' + L.cls + '">' + esc(L.label) + "</span>" + (m.localName ? ' <span class="small muted">' + esc(m.localName) + "</span>" : "") + "</div>" +
     '<div class="small muted">' + esc(m.setName ? m.setName + " · " : "") + esc(m.setId) + " · #" + esc(m.localId) + (m.official ? "/" + esc(m.official) : "") + "</div>" +
+    '<button class="btn small" type="button" id="cPhotoBtn" style="margin-top:8px">📷 ' + (ph ? "Retake photo" : "Add photo") + "</button>" +
     "</div></div>" +
     '<div class="grid2">' +
     '<label class="f">Version<select id="cVariant">' + m.variants.map(function (x, i) { return '<option value="' + i + '"' + (i === current.variantIdx ? " selected" : "") + ">" + esc(x.label) + "</option>"; }).join("") + "</select></label>" +
@@ -747,6 +754,8 @@ function renderCard() {
   $("result").innerHTML = html;
   $("cVariant").addEventListener("change", function () { current.variantIdx = +this.value; current.dirty = { buy: false, sell: false }; renderPrice(); });
   $("cCond").addEventListener("change", function () { current.cond = this.value; renderPrice(); });
+  $("cPhotoBtn").addEventListener("click", function () { $("photoFile").click(); });
+  fillPhotos($("result"));
   renderPrice();
 }
 
@@ -902,8 +911,9 @@ function ensureItem() {
   var it = S.items[key];
   if (!it) {
     it = S.items[key] = { key: key, lang: m.lang, cardId: m.cardId, name: m.name, localName: m.localName || "", setId: m.setId, setName: m.setName, localId: m.localId, official: m.official,
-      image: m.image, manual: !!m.manual, variantId: v.id, variantLabel: v.label, cond: current.cond, qty: 0, cost: 0, firstIn: null, lastIn: null, market: null };
+      image: m.image, photo: current.photoId || photoFor(m) || "", manual: !!m.manual, variantId: v.id, variantLabel: v.label, cond: current.cond, qty: 0, cost: 0, firstIn: null, lastIn: null, market: null };
   }
+  if (current.photoId && it.photo !== current.photoId) it.photo = current.photoId;
   return it;
 }
 
@@ -984,7 +994,7 @@ function renderStock() {
   var html = '<div class="sgrid">';
   items.forEach(function (it) {
     html += '<button type="button" class="tile" data-key="' + esc(it.key) + '" title="' + esc(it.name + " · " + it.setId + " #" + it.localId) + '">' +
-      '<span class="pic">' + (it.image ? '<img alt="" loading="lazy" src="' + esc(imgUrl(it.image)) + '" onerror="this.remove()">' : "") +
+      '<span class="pic">' + (it.photo ? '<img alt="" data-photo="' + esc(it.photo) + '">' : it.image ? '<img alt="" loading="lazy" src="' + esc(imgUrl(it.image)) + '" onerror="this.remove()">' : "") +
       '<span class="ph">' + esc(it.setId) + "<br>#" + esc(it.localId) + "</span>" +
       '<span class="lang">' + langBadge(it.lang) + "</span>" + (it.qty > 1 ? '<span class="qty">×' + it.qty + "</span>" : "") + "</span>" +
       '<span class="nm">' + esc(it.name) + "</span>" +
@@ -992,6 +1002,7 @@ function renderStock() {
       '<span class="px"><b>' + (it.market != null ? money(it.market) : "no price") + '</b><span class="muted">paid ' + money(it.cost / it.qty) + "</span></span></button>";
   });
   $("stockList").innerHTML = html + "</div>";
+  fillPhotos($("stockList"));
   $("stockList").querySelectorAll("[data-key]").forEach(function (b) { b.addEventListener("click", function () { openItem(S.items[b.dataset.key]); }); });
 }
 function openItem(it) {
@@ -1427,6 +1438,17 @@ $("scanBtn").addEventListener("click", function () {
   }
   $("scanFile").click();
 });
+$("photoFile").addEventListener("change", function () {
+  var f = this.files && this.files[0]; this.value = "";
+  if (!f || !current) return;
+  var model = current.model;
+  savePhoto(f).then(function (id) {
+    if (!current || current.model !== model) return;
+    current.photoId = id;
+    Object.keys(S.items).forEach(function (k) { if (S.items[k].cardId === model.cardId) S.items[k].photo = id; });
+    save(); renderCard(); toast("Photo saved with this card.");
+  }).catch(function (e) { toast(e.message); });
+});
 $("scanFile").addEventListener("change", function () {
   var f = this.files && this.files[0]; this.value = "";
   if (!f) return;
@@ -1434,6 +1456,7 @@ $("scanFile").addEventListener("change", function () {
   scanStatus('<div class="notice"><span class="spinner"></span> Reading the card…</div>');
   shrinkPhoto(f).then(function (dataUrl) {
     thumb = dataUrl;
+    savePhoto(dataUrl).then(function (id) { pendingScanPhoto = { id: id, at: Date.now() }; }).catch(function () {});
     scanStatus('<div class="scanprev"><img alt="Your photo" src="' + dataUrl + '"><div><span class="spinner"></span> <span class="muted">Reading the card…</span></div></div>');
     return readCardPhoto(dataUrl);
   }).then(function (r) {
@@ -1553,11 +1576,308 @@ function removeSampleData(quiet) {
 $("sampleAdd").addEventListener("click", function () { addSampleData(); });
 $("sampleRemove").addEventListener("click", function () { removeSampleData(false); });
 
+/* ---------- card photos (kept on the device in IndexedDB, copied online when sync is on) ---------- */
+var PHOTO_BUCKET = "card-photos";
+var photoDbP = null, photoUrls = {};
+function photoDb() {
+  if (!photoDbP) photoDbP = new Promise(function (res, rej) {
+    var r = indexedDB.open("kcs-photos", 1);
+    r.onupgradeneeded = function () { r.result.createObjectStore("p"); };
+    r.onsuccess = function () { res(r.result); };
+    r.onerror = function () { rej(r.error); };
+  });
+  return photoDbP;
+}
+function photoPut(id, blob) {
+  return photoDb().then(function (db) { return new Promise(function (res, rej) {
+    var t = db.transaction("p", "readwrite"); t.objectStore("p").put(blob, id); t.oncomplete = function () { res(); }; t.onerror = function () { rej(t.error); };
+  }); });
+}
+function photoGetLocal(id) {
+  return photoDb().then(function (db) { return new Promise(function (res) {
+    var r = db.transaction("p").objectStore("p").get(id); r.onsuccess = function () { res(r.result || null); }; r.onerror = function () { res(null); };
+  }); }).catch(function () { return null; });
+}
+function photoPath(id) { return syncState.user.id + "/" + id + ".jpg"; }
+function photoUrl(id) {
+  if (photoUrls[id]) return Promise.resolve(photoUrls[id]);
+  return photoGetLocal(id).then(function (b) {
+    if (b || !sb || !syncState.user) return b;
+    return sb.storage.from(PHOTO_BUCKET).download(photoPath(id)).then(function (r) {
+      if (!r || !r.data) return null;
+      photoPut(id, r.data).catch(function () {});
+      return r.data;
+    }).catch(function () { return null; });
+  }).then(function (b) { if (!b) return null; photoUrls[id] = URL.createObjectURL(b); return photoUrls[id]; });
+}
+function fillPhotos(root) {
+  (root || document).querySelectorAll("img[data-photo]").forEach(function (img) {
+    var id = img.getAttribute("data-photo"); img.removeAttribute("data-photo");
+    photoUrl(id).then(function (u) { if (u) img.src = u; else img.remove(); });
+  });
+}
+function photoBlobFrom(src, max) { // src: File or data URL -> JPEG Blob, longest side <= max
+  return new Promise(function (resolve, reject) {
+    var url = typeof src === "string" ? src : URL.createObjectURL(src), img = new Image();
+    img.onload = function () {
+      var w = img.naturalWidth, h = img.naturalHeight, k = Math.min(1, max / Math.max(w, h));
+      var c = document.createElement("canvas"); c.width = Math.round(w * k); c.height = Math.round(h * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      if (typeof src !== "string") URL.revokeObjectURL(url);
+      c.toBlob(function (b) { b ? resolve(b) : reject(new Error("Couldn't save that photo.")); }, "image/jpeg", 0.82);
+    };
+    img.onerror = function () { reject(new Error("That file isn't a photo this browser can open.")); };
+    img.src = url;
+  });
+}
+function savePhoto(src) { var id = "ph" + uid(); return photoBlobFrom(src, 1000).then(function (b) { return photoPut(id, b); }).then(function () { return id; }); }
+function photoFor(m) { // a photo already taken of this card, if any
+  if (current && current.model === m && current.photoId) return current.photoId;
+  var ks = Object.keys(S.items);
+  for (var i = 0; i < ks.length; i++) { var it = S.items[ks[i]]; if (it.cardId === m.cardId && it.photo) return it.photo; }
+  return "";
+}
+var pendingScanPhoto = null; // { id, at } from the last camera scan, attached to the card it finds
+
+/* ---------- sync across devices (Supabase) ---------- */
+// The project URL and publishable/anon key are safe to publish: every row and photo is locked to the signed-in account.
+var SB_URL = "", SB_KEY = "";
+var SB_LIB = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";
+var SYNC_META = "kcs.sync";
+var sb = null, syncState = { user: null, busy: false, again: false, last: 0, error: "", status: "", libError: "" }, syncTimer = null;
+function sbConfig() {
+  var u = SB_URL, k = SB_KEY;
+  try { u = u || localStorage.getItem("kcs.sbUrl") || ""; k = k || localStorage.getItem("kcs.sbKey") || ""; } catch (e) {}
+  return u && k ? { url: u.trim().replace(/\/+$/, ""), key: k.trim() } : null;
+}
+function stableJson(v) { // same text for the same data, whatever order the keys come back in
+  if (Array.isArray(v)) return "[" + v.map(stableJson).join(",") + "]";
+  if (v && typeof v === "object") return "{" + Object.keys(v).filter(function (k) { return v[k] !== undefined; }).sort().map(function (k) { return JSON.stringify(k) + ":" + stableJson(v[k]); }).join(",") + "}";
+  return JSON.stringify(v === undefined ? null : v);
+}
+function syncMeta() { var m = null; try { m = JSON.parse(localStorage.getItem(SYNC_META) || "null"); } catch (e) {} return m || { uid: "", lastPull: "", hashes: {}, uploaded: {} }; }
+function setSyncMeta(m) { try { localStorage.setItem(SYNC_META, JSON.stringify(m)); } catch (e) {} }
+function loadSupabaseLib() {
+  if (window.supabase && window.supabase.createClient) return Promise.resolve();
+  return new Promise(function (res, rej) {
+    var s = document.createElement("script"); s.src = SB_LIB; s.onload = function () { res(); };
+    s.onerror = function () { rej(new Error("Couldn't load the sync tools. Check the wifi.")); };
+    document.head.appendChild(s);
+  });
+}
+function initSync() {
+  var c = sbConfig();
+  if (!c) { renderSyncPanel(); return; }
+  loadSupabaseLib().then(function () {
+    sb = window.supabase.createClient(c.url, c.key, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "kcs.auth" } });
+    sb.auth.onAuthStateChange(function (ev, session) {
+      var u = (session && session.user) || null, was = syncState.user && syncState.user.id;
+      syncState.user = u; renderSyncPanel();
+      if (u && u.id !== was) setTimeout(syncNow, 0);
+    });
+    return sb.auth.getSession().then(function (r) {
+      var u = r && r.data && r.data.session ? r.data.session.user : null;
+      if (u && !syncState.user) { syncState.user = u; syncNow(); }
+      renderSyncPanel();
+    });
+  }).catch(function (e) { syncState.libError = e.message; renderSyncPanel(); });
+}
+function scheduleSync(delay) {
+  if (!sb || !syncState.user) return;
+  clearTimeout(syncTimer); syncTimer = setTimeout(syncNow, delay == null ? 2500 : delay);
+}
+function isSampleKey(kind, id) {
+  if (kind === "price") return SAMPLE_CARDS.some(function (c) { return c.mine != null && priceKey(c.lang, c.id, c.v) === id; });
+  return false;
+}
+function localRecords() {
+  var r = {};
+  Object.keys(S.items).forEach(function (k) { var it = S.items[k]; if (!it.sample) r["item|" + k] = it; });
+  S.tx.forEach(function (t) { if (!t.sample) r["tx|" + t.id] = t; });
+  Object.keys(S.myPrices).forEach(function (k) { if (!isSampleKey("price", k)) r["price|" + k] = { v: S.myPrices[k] }; });
+  (S.shows || []).forEach(function (sh) { r["show|" + sh.id] = sh; });
+  r["settings|main"] = { buyPct: S.settings.buyPct, show: S.settings.show || null, event: S.settings.event || "" };
+  return r;
+}
+function applyRemote(kind, id, data, deleted) {
+  if (kind === "item") { if (deleted) delete S.items[id]; else S.items[id] = data; }
+  else if (kind === "tx") {
+    var i = S.tx.findIndex(function (t) { return t.id === id; });
+    if (deleted) { if (i >= 0) S.tx.splice(i, 1); }
+    else if (i >= 0) S.tx[i] = data; else S.tx.push(data);
+  } else if (kind === "price") { if (deleted) delete S.myPrices[id]; else S.myPrices[id] = data.v; }
+  else if (kind === "show") {
+    S.shows = S.shows || [];
+    var j = S.shows.findIndex(function (x) { return x.id === id; });
+    if (deleted) { if (j >= 0) S.shows.splice(j, 1); } else if (j >= 0) S.shows[j] = data; else S.shows.push(data);
+  } else if (kind === "settings" && !deleted && data) {
+    if (data.buyPct) S.settings.buyPct = data.buyPct;
+    S.settings.show = data.show || null; S.settings.event = data.event || "";
+  }
+}
+// Recounts quantity and cost for every card from the buy/sell history, so two devices can't leave stock out of step.
+function rebuildItems() {
+  var agg = {};
+  S.tx.slice().sort(function (a, b) { return a.ts - b.ts; }).forEach(function (t) {
+    if (!S.items[t.key]) return;
+    var a = agg[t.key] || (agg[t.key] = { qty: 0, cost: 0, firstIn: null, lastIn: null });
+    if (t.type === "buy") { if (a.qty <= 0) a.firstIn = t.ts; a.qty += t.qty; a.cost += t.unit * t.qty; a.lastIn = t.ts; }
+    else { var avg = a.qty > 0 ? a.cost / a.qty : 0; a.qty -= t.qty; a.cost = a.qty > 0 ? a.cost - avg * t.qty : 0; if (a.qty <= 0) { a.qty = 0; a.firstIn = null; } }
+  });
+  Object.keys(agg).forEach(function (k) {
+    var it = S.items[k], a = agg[k];
+    if (it.qty !== a.qty || Math.abs(it.cost - a.cost) > 0.0001) { it.qty = a.qty; it.cost = a.cost; it.firstIn = a.firstIn; it.lastIn = a.lastIn; }
+  });
+}
+function syncNow() {
+  if (!sb || !syncState.user) return Promise.resolve();
+  if (syncState.busy) { syncState.again = true; return Promise.resolve(); }
+  syncState.busy = true; syncState.error = ""; syncState.status = "Syncing…"; renderSyncPanel();
+  var uidNow = syncState.user.id, meta = syncMeta();
+  if (meta.uid !== uidNow) meta = { uid: uidNow, lastPull: "", hashes: {}, uploaded: {} };
+  var local = localRecords(), rows = [], sent = {};
+  Object.keys(local).forEach(function (key) {
+    var json = stableJson(local[key]);
+    if (meta.hashes[key] !== json) { var p = key.indexOf("|"); rows.push({ user_id: uidNow, kind: key.slice(0, p), id: key.slice(p + 1), data: local[key], deleted: false }); sent[key] = json; }
+  });
+  Object.keys(meta.hashes).forEach(function (key) {
+    if (!(key in local)) { var p = key.indexOf("|"); rows.push({ user_id: uidNow, kind: key.slice(0, p), id: key.slice(p + 1), data: null, deleted: true }); sent[key] = null; }
+  });
+  function push(i) {
+    if (i >= rows.length) return Promise.resolve();
+    return sb.from("records").upsert(rows.slice(i, i + 400), { onConflict: "user_id,kind,id" }).then(function (r) {
+      if (r.error) throw r.error;
+      rows.slice(i, i + 400).forEach(function (row) { var key = row.kind + "|" + row.id; if (sent[key] === null) delete meta.hashes[key]; else meta.hashes[key] = sent[key]; });
+      return push(i + 400);
+    });
+  }
+  var changed = false;
+  function pull(from) {
+    var q = sb.from("records").select("kind,id,data,deleted,updated_at").order("updated_at", { ascending: true }).range(from, from + 999);
+    if (meta.lastPull) q = q.gte("updated_at", meta.lastPull);
+    return q.then(function (r) {
+      if (r.error) throw r.error;
+      (r.data || []).forEach(function (row) {
+        var key = row.kind + "|" + row.id, json = row.deleted ? null : stableJson(row.data);
+        var mine = json === (key in meta.hashes ? meta.hashes[key] : undefined);
+        if (!mine) { applyRemote(row.kind, row.id, row.data, row.deleted); changed = true; }
+        if (row.deleted) delete meta.hashes[key]; else meta.hashes[key] = json;
+        if (!meta.lastPull || row.updated_at > meta.lastPull) meta.newPull = row.updated_at;
+      });
+      if (r.data && r.data.length === 1000) return pull(from + 1000);
+    });
+  }
+  function uploadPhotos() {
+    var ids = {};
+    Object.keys(S.items).forEach(function (k) { var p = S.items[k].photo; if (p && !meta.uploaded[p] && !S.items[k].sample) ids[p] = 1; });
+    return Object.keys(ids).reduce(function (chain, id) {
+      return chain.then(function () { return photoGetLocal(id); }).then(function (b) {
+        if (!b) { meta.uploaded[id] = 1; return; } // taken on another device, already online
+        return sb.storage.from(PHOTO_BUCKET).upload(uidNow + "/" + id + ".jpg", b, { upsert: true, contentType: "image/jpeg" }).then(function (r) {
+          if (r.error) throw r.error;
+          meta.uploaded[id] = 1;
+        });
+      });
+    }, Promise.resolve());
+  }
+  return push(0).then(function () { return pull(0); }).then(function () {
+    // look back a minute on the next pull, in case a change from another device was saved a moment late
+    if (meta.newPull) { meta.lastPull = new Date(Date.parse(meta.newPull) - 60000).toISOString(); delete meta.newPull; }
+    if (changed) {
+      S.tx.sort(function (a, b) { return a.ts - b.ts; });
+      rebuildItems(); migrateNames();
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {}
+      refreshAfterSync();
+    }
+    setSyncMeta(meta);
+    return uploadPhotos().then(function () { setSyncMeta(meta); });
+  }).then(function () {
+    syncState.last = Date.now(); syncState.status = "";
+  }).catch(function (e) {
+    setSyncMeta(meta);
+    syncState.status = ""; syncState.error = (e && e.message) || "Sync failed.";
+  }).then(function () {
+    syncState.busy = false; renderSyncPanel();
+    var dirty = stableJson(localRecords()) !== stableJson(local);
+    if (syncState.again || dirty) { syncState.again = false; scheduleSync(1000); }
+  });
+}
+function refreshAfterSync() {
+  renderEventChip();
+  if (!$("v-stock").hidden) renderStock();
+  if (!$("v-log").hidden) renderLog();
+  if (!$("v-reports").hidden) renderReports();
+  if (current && $("pricePanel") && !$("v-lookup").hidden) renderPrice();
+}
+function agoLabel(ts) { var s = Math.round((Date.now() - ts) / 1000); return s < 60 ? "just now" : s < 3600 ? Math.round(s / 60) + " min ago" : timeLabel(ts); }
+function renderSyncPanel() {
+  var el = $("syncPanel"); if (!el) return;
+  var c = sbConfig(), html = "<h3>Sync across devices</h3>";
+  if (!c) {
+    html += '<div class="small muted">Not set up yet. Each device keeps its own records until this is connected to an online account.</div>' +
+      '<details><summary class="small">Connect to Supabase</summary><div style="display:grid;gap:8px;margin-top:8px">' +
+      '<label class="f">Project URL<input type="url" id="sbUrlIn" placeholder="https://xxxx.supabase.co" autocomplete="off" spellcheck="false"></label>' +
+      '<label class="f">Publishable (anon) key<input type="text" id="sbKeyIn" placeholder="sb_publishable_… or eyJ…" autocomplete="off" spellcheck="false"></label>' +
+      '<button class="btn" type="button" id="sbSave">Connect</button></div></details>';
+  } else if (syncState.libError) {
+    html += '<div class="notice warn">' + esc(syncState.libError) + '</div><button class="btn" type="button" id="sbRetry">Try again</button>';
+  } else if (!sb) {
+    html += '<div class="small muted"><span class="spinner"></span> Connecting…</div>';
+  } else if (!syncState.user) {
+    html += '<div class="small muted">Sign in to keep records and card photos the same on every device. Use the same account on the phone, iPad and laptop. Records already on this device are added to the account.</div>' +
+      '<form id="sbAuth" style="display:grid;gap:8px"><label class="f">Email<input type="email" id="sbEmail" autocomplete="username" required></label>' +
+      '<label class="f">Password<input type="password" id="sbPass" autocomplete="current-password" minlength="6" required></label>' +
+      '<div class="row"><button class="btn primary" type="submit">Sign in</button><button class="btn" type="button" id="sbSignUp">Create account</button></div></form>' +
+      '<div class="small" id="sbMsg"></div>';
+  } else {
+    var st = syncState.busy ? '<span class="spinner"></span> Syncing…' : syncState.error ? '<span style="color:var(--warn)">Couldn’t sync: ' + esc(syncState.error) + "</span>" : syncState.last ? "✓ Synced " + agoLabel(syncState.last) : "";
+    html += '<div class="small">Signed in as <b>' + esc(syncState.user.email || "") + "</b></div>" +
+      '<div class="small muted" id="sbStatus">' + st + "</div>" +
+      '<div class="row"><button class="btn" type="button" id="sbSyncNow">Sync now</button><button class="btn" type="button" id="sbSignOut">Sign out</button></div>';
+  }
+  if (c && !SB_URL) html += '<button type="button" class="disclose" id="sbForget">Disconnect this device from Supabase</button>';
+  el.innerHTML = html;
+  function on(id, ev, fn) { if ($(id)) $(id).addEventListener(ev, fn); }
+  on("sbSave", "click", function () {
+    var u = $("sbUrlIn").value.trim(), k = $("sbKeyIn").value.trim();
+    if (!/^https:\/\/.+/.test(u) || k.length < 20) { toast("Paste the Project URL and the publishable key from Supabase."); return; }
+    try { localStorage.setItem("kcs.sbUrl", u); localStorage.setItem("kcs.sbKey", k); } catch (e) {}
+    initSync(); renderSyncPanel();
+  });
+  on("sbRetry", "click", function () { syncState.libError = ""; initSync(); renderSyncPanel(); });
+  on("sbForget", "click", function () {
+    try { localStorage.removeItem("kcs.sbUrl"); localStorage.removeItem("kcs.sbKey"); localStorage.removeItem("kcs.auth"); } catch (e) {}
+    sb = null; syncState.user = null; renderSyncPanel();
+  });
+  on("sbAuth", "submit", function (e) {
+    e.preventDefault();
+    $("sbMsg").textContent = "Signing in…";
+    sb.auth.signInWithPassword({ email: $("sbEmail").value.trim(), password: $("sbPass").value }).then(function (r) {
+      if (r.error) $("sbMsg").textContent = r.error.message === "Invalid login credentials" ? "That email and password don’t match an account." : r.error.message;
+    });
+  });
+  on("sbSignUp", "click", function () {
+    var em = $("sbEmail").value.trim(), pw = $("sbPass").value;
+    if (!em || pw.length < 6) { $("sbMsg").textContent = "Type an email and a password of at least 6 characters first."; return; }
+    $("sbMsg").textContent = "Creating the account…";
+    sb.auth.signUp({ email: em, password: pw }).then(function (r) {
+      if (r.error) $("sbMsg").textContent = r.error.message;
+      else if (!r.data.session) $("sbMsg").textContent = "Account created. Check that email for a confirmation link, then come back and sign in.";
+    });
+  });
+  on("sbSyncNow", "click", function () { syncNow(); });
+  on("sbSignOut", "click", function () { sb.auth.signOut().then(function () { syncState.user = null; renderSyncPanel(); toast("Signed out. Records stay on this device."); }); });
+}
+setInterval(function () { if (!document.hidden) { scheduleSync(0); if ($("sbStatus") && !syncState.busy && syncState.last) renderSyncPanel(); } }, 60000);
+document.addEventListener("visibilitychange", function () { if (!document.hidden) scheduleSync(0); });
+window.addEventListener("online", function () { scheduleSync(0); });
+
 /* ---------- start ---------- */
 migrateNames();
 if (!S.settings.show && S.settings.event) { S.settings.event = ""; save(); }
 setLang(S.settings.lang || "ja");
 renderEventChip();
+initSync();
 if (!S.settings.eurUsdDate || S.settings.eurUsdDate !== new Date().toISOString().slice(0, 10)) fetchRate(true);
 if (!S.tx.length) {
   $("result").innerHTML = '<div class="panel"><h3>Try it</h3><div class="small muted">Type the set code and number from the bottom of a card. To see how it works, try a Japanese Charizard ex from Pokémon Card 151.</div><div class="row"><button class="btn" type="button" id="tryEx">Look up SV2a 201</button><button class="btn" type="button" id="trySample">Add sample cards</button></div></div>';
