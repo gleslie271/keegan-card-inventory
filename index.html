@@ -1041,7 +1041,14 @@ function renderReports() {
   html += '<div class="panel"><h3>By show</h3>';
   if (events.length) {
     html += '<select id="repEvent" aria-label="Pick a show">' + events.map(function (e) { return "<option" + (e === reportEvent ? " selected" : "") + ">" + esc(e) + "</option>"; }).join("") + "</select>";
-    html += statsHTML(summarize(S.tx.filter(function (t) { return (t.event || "(no show set)") === reportEvent; })));
+    var repTx = S.tx.filter(function (t) { return (t.event || "(no show set)") === reportEvent; }), repR = summarize(repTx);
+    var shRec = (S.shows || []).filter(function (x) { return x.name === reportEvent; })[0] || (S.settings.show && S.settings.show.name === reportEvent ? S.settings.show : null);
+    if (shRec) {
+      var shDur = (shRec.end || Date.now()) - shRec.start;
+      html += '<div class="small muted" style="margin:8px 0">' + dateLabel(shRec.start) + " · " + timeLabel(shRec.start) + "–" + (shRec.end ? timeLabel(shRec.end) : "still running") +
+        " · <b>" + durLabel(shDur) + " worked</b>" + (perHour(repR.profit, shDur) ? " · profit " + perHour(repR.profit, shDur) : "") + "</div>";
+    }
+    html += statsHTML(repR);
   } else html += '<div class="notice">Tap Start show on the Look up screen, and buys and sales get grouped by show here.</div>';
   html += "</div>";
   html += '<div class="panel"><h3>All time</h3>' + statsHTML(summarize(S.tx)) + "</div>";
@@ -1072,6 +1079,8 @@ function downloadFile(f) {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(function () { URL.revokeObjectURL(a.href); }, 10000);
 }
+function durLabel(ms) { var m = Math.max(0, Math.round(ms / 60000)), h = Math.floor(m / 60); return h ? h + " hr " + (m % 60) + " min" : m + " min"; }
+function perHour(amount, ms) { var h = ms / 3600000; return h >= 0.25 ? money(amount / h) + " per hour" : ""; }
 function showTx(sh) { return S.tx.filter(function (t) { return t.showId === sh.id; }); }
 function csvCell(v) { v = v == null ? "" : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
 function showCsvFile(sh) {
@@ -1086,9 +1095,11 @@ function showCsvFile(sh) {
   rows.push(["Show", sh.name]);
   rows.push(["Started", localDay(sh.start) + " " + timeLabel(sh.start)]);
   rows.push(["Ended", sh.end ? localDay(sh.end) + " " + timeLabel(sh.end) : ""]);
+  var dur = (sh.end || Date.now()) - sh.start;
+  rows.push(["Time worked", durLabel(dur), "Hours", (dur / 3600000).toFixed(2)]);
   rows.push(["Cards sold", r.sold, "Sales", r.revenue.toFixed(2)]);
   rows.push(["Cards bought", r.bought, "Spent", r.spent.toFixed(2)]);
-  rows.push(["Profit on sales", r.profit.toFixed(2)]);
+  rows.push(["Profit on sales", r.profit.toFixed(2), "Profit per hour", dur >= 900000 ? (r.profit / (dur / 3600000)).toFixed(2) : ""]);
   var csv = "﻿" + rows.map(function (row) { return row.map(csvCell).join(","); }).join("\r\n");
   return new File([csv], "show-" + localDay(sh.start) + "-" + fileSafe(sh.name) + ".csv", { type: "text/csv" });
 }
@@ -1108,13 +1119,15 @@ function renderShowBar() {
   if (sh) {
     var r = summarize(showTx(sh));
     if (showUi.mode === "confirmEnd") {
+      var el = Date.now() - sh.start;
       html = '<div class="live"><span class="dot"></span>End ' + esc(sh.name) + "?</div>" +
+        '<div class="small"><b>Time worked: ' + durLabel(el) + "</b>" + (perHour(r.profit, el) ? " · profit " + perHour(r.profit, el) : "") + "</div>" +
         '<div class="small">' + r.sold + " sold for " + money(r.revenue) + " · " + r.bought + " bought for " + money(r.spent) + " · profit " + money(r.profit) + "</div>" +
         '<div class="small muted">This saves a list of the show’s buys and sales and a full backup. On a phone, pick Save to Files (or email it to yourself).</div>' +
         '<div class="row2"><button class="btn" type="button" id="showCancel">Keep going</button><button class="btn end" type="button" id="showEndYes">End show and save list</button></div>';
     } else {
       html = '<div class="live"><span class="dot"></span><span style="min-width:0;overflow-wrap:anywhere">' + esc(sh.name) + "</span></div>" +
-        '<div class="small muted">Started ' + (localDay(sh.start) === localDay(Date.now()) ? "" : dateLabel(sh.start) + " ") + timeLabel(sh.start) + " · " + r.sold + " sold (" + money(r.revenue) + ") · " + r.bought + " bought (" + money(r.spent) + ") · profit " + money(r.profit) + "</div>" +
+        '<div class="small muted">Started ' + (localDay(sh.start) === localDay(Date.now()) ? "" : dateLabel(sh.start) + " ") + timeLabel(sh.start) + ' · <b id="showElapsed">' + durLabel(Date.now() - sh.start) + "</b> so far · " + r.sold + " sold (" + money(r.revenue) + ") · " + r.bought + " bought (" + money(r.spent) + ") · profit " + money(r.profit) + "</div>" +
         '<div class="row2"><button class="btn end" type="button" id="showEnd">End show</button></div>';
     }
   } else if (showUi.mode === "naming") {
@@ -1139,6 +1152,8 @@ function renderShowBar() {
   on("showResave", function () { saveShowFiles(showUi.lastEnded); });
   on("showDismiss", function () { showUi.lastEnded = null; renderShowBar(); });
 }
+setInterval(function () { var e = $("showElapsed"); if (e && S.settings.show) e.textContent = durLabel(Date.now() - S.settings.show.start); }, 30000);
+document.addEventListener("visibilitychange", function () { if (!document.hidden && showUi.mode !== "naming") renderShowBar(); });
 function startShow() {
   var name = ($("showName").value || "").trim() || "Show " + localDay(Date.now());
   // keep show names unique so reports don't mix two shows with the same name
@@ -1157,7 +1172,7 @@ function endShow() {
   S.settings.show = null; S.settings.event = "";
   showUi.mode = ""; showUi.lastEnded = sh;
   save(); renderEventChip();
-  saveShowFiles(sh).then(function (ok) { toast(ok ? "Show ended. List and backup saved." : "Show ended. The files weren’t saved. Tap “Save list and backup again”."); });
+  saveShowFiles(sh).then(function (ok) { toast(ok ? "Show ended after " + durLabel(sh.end - sh.start) + ". List and backup saved." : "Show ended. The files weren’t saved. Tap “Save list and backup again”."); });
 }
 
 /* ---------- settings ---------- */
