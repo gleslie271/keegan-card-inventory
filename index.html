@@ -225,8 +225,7 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
   <form class="panel" id="findForm" autocomplete="off">
     <div class="seg" id="langSeg" role="group" aria-label="Card language">
       <button type="button" data-lang="ja">Japanese</button>
-      <button type="button" data-lang="zh-tw">中文 繁</button>
-      <button type="button" data-lang="zh-cn">中文 简</button>
+      <button type="button" data-lang="zh">Chinese</button>
       <button type="button" data-lang="en">English</button>
     </div>
     <div class="row">
@@ -376,6 +375,7 @@ var LANGS = {
   "ja":    { label: "Japanese", badge: "JP", cls: "ja", word: "japanese" },
   "zh-tw": { label: "Chinese (Traditional)", badge: "CN-T", cls: "zh", word: "chinese" },
   "zh-cn": { label: "Chinese (Simplified)", badge: "CN-S", cls: "zh", word: "chinese" },
+  "zh":    { label: "Chinese", badge: "CN", cls: "zh", word: "chinese" },
   "en":    { label: "English", badge: "EN", cls: "en", word: "" }
 };
 
@@ -525,9 +525,16 @@ function loadSets(lang) {
     return sets;
   });
 }
+function loadSetsFor(lang) {
+  if (lang !== "zh") return loadSets(lang);
+  return Promise.all([loadSets("zh-tw").catch(function () { return []; }), loadSets("zh-cn").catch(function () { return []; })]).then(function (r) {
+    var seen = {};
+    return r[0].concat(r[1]).filter(function (x) { if (seen[x.id]) return false; seen[x.id] = 1; return true; });
+  });
+}
 function fillSetList(lang) {
   var dl = $("setList"); dl.innerHTML = "";
-  loadSets(lang).then(function (sets) {
+  loadSetsFor(lang).then(function (sets) {
     if (S.settings.lang !== lang) return;
     var frag = document.createDocumentFragment();
     sets.slice().reverse().forEach(function (s) { var o = document.createElement("option"); o.value = s.id; o.label = s.name; frag.appendChild(o); });
@@ -755,9 +762,10 @@ function openTwinPicker() {
 var current = null; // { model, variantIdx, cond, dirty: {buy, sell} }
 
 function setLang(lang) {
+  if (lang === "zh-tw" || lang === "zh-cn") lang = "zh"; // one Chinese button looks in both catalogs
   S.settings.lang = lang; save();
   document.querySelectorAll("#langSeg button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.lang === lang)); });
-  $("setInput").placeholder = { ja: "e.g. SV2a", "zh-tw": "e.g. SC2a", "zh-cn": "e.g. CSM1aC", en: "e.g. sv03.5" }[lang];
+  $("setInput").placeholder = { ja: "e.g. SV2a", zh: "e.g. SC2a or CSV8C", en: "e.g. sv03.5" }[lang];
   fillSetList(lang);
 }
 document.querySelectorAll("#langSeg button").forEach(function (b) { b.addEventListener("click", function () { setLang(b.dataset.lang); }); });
@@ -772,10 +780,11 @@ $("manualBtn").addEventListener("click", function () {
 
 function busy(msg) { $("result").innerHTML = '<div class="panel"><div><span class="spinner"></span> <span class="muted">' + esc(msg) + "</span></div></div>"; }
 
-function runFind(setIn, numIn, preselect) {
+function runFind(setIn, numIn, preselect, prefer) {
   var lang = S.settings.lang;
   if (!setIn.trim() || !numIn.trim()) { $("result").innerHTML = '<div class="notice">Type the set code and the card number, then tap Find card.</div>'; return; }
   busy("Looking up the card…");
+  if (lang === "zh") { runFindZh(setIn, numIn, preselect, prefer); return; }
   loadSets(lang).then(function (sets) {
     var matches = resolveSet(sets, setIn);
     if (!matches.length) {
@@ -792,6 +801,41 @@ function runFind(setIn, numIn, preselect) {
     return findCard(lang, matches[0], numIn).then(function (model) {
       if (!model) { notFound(lang, matches[0].id, numIn, "Set " + matches[0].id + " (" + matches[0].name + ") has no card number " + normNum(numIn) + " in the catalog."); return; }
       openCard(model, preselect);
+    });
+  }).catch(function (err) {
+    $("result").innerHTML = '<div class="notice warn">Couldn’t reach the card catalog. Check the wifi and try again. (' + esc(err.message) + ")</div>";
+  });
+}
+
+// Chinese: look in both the Traditional and Simplified catalogs; only ask when the card is in both.
+function runFindZh(setIn, numIn, preselect, prefer) {
+  var langs = ["zh-tw", "zh-cn"];
+  Promise.all(langs.map(function (l) { return loadSets(l).catch(function () { return []; }); })).then(function (all) {
+    var q = setIn.trim().toLowerCase(), exact = [], named = [];
+    all.forEach(function (sets, i) {
+      sets.forEach(function (st) { if (st.id.toLowerCase() === q) exact.push({ lang: langs[i], set: st }); });
+      resolveSet(sets, setIn).forEach(function (st) { if (st.id.toLowerCase() !== q) named.push({ lang: langs[i], set: st }); });
+    });
+    if (!exact.length && !named.length) { notFound("zh", setIn, numIn, "No Chinese set has the code “" + setIn.trim() + "”. Check the code on the card, or pick one from the suggestions as you type."); return; }
+    if (!exact.length) {
+      var html = '<div class="panel"><h3>Which set?</h3><div class="list">';
+      named.slice(0, 12).forEach(function (x, i) { html += '<button type="button" class="item" data-i="' + i + '" style="grid-template-columns:1fr auto"><span class="t"><b>' + esc(x.set.name) + '</b><span class="small muted">' + esc(x.set.id) + " · " + esc(LANGS[x.lang].label) + "</span></span><span>›</span></button>"; });
+      $("result").innerHTML = html + "</div></div>";
+      $("result").querySelectorAll("[data-i]").forEach(function (b) { b.addEventListener("click", function () { var x = named[+b.dataset.i]; $("setInput").value = x.set.id; runFind(x.set.id, numIn, preselect, x.lang); }); });
+      return;
+    }
+    return Promise.all(exact.map(function (x) { return findCard(x.lang, x.set, numIn).catch(function () { return null; }); })).then(function (models) {
+      models = models.filter(Boolean);
+      if (!models.length) { notFound("zh", exact[0].set.id, numIn, "Set " + exact[0].set.id + " (" + exact[0].set.name + ") has no card number " + normNum(numIn) + " in the catalog."); return; }
+      var pick = prefer && models.filter(function (m) { return m.lang === prefer; })[0];
+      if (pick || models.length === 1) { openCard(pick || models[0], preselect); return; }
+      var html = '<div class="panel"><h3>Which print is your card?</h3><div class="small muted">This set code and number are in both Chinese catalogs. Match the name on your card.</div><div class="list">';
+      models.forEach(function (m, i) {
+        html += '<button type="button" class="item" data-m="' + i + '" style="grid-template-columns:1fr auto"><span class="t"><b style="font-size:18px">' + esc(m.localName || m.name) + '</b><span class="small muted">' +
+          esc(LANGS[m.lang].label) + (m.lang === "zh-tw" ? " (Taiwan / Hong Kong print)" : " (mainland China print)") + " · " + esc(m.setName || m.setId) + "</span></span><span>›</span></button>";
+      });
+      $("result").innerHTML = html + "</div></div>";
+      $("result").querySelectorAll("[data-m]").forEach(function (b) { b.addEventListener("click", function () { openCard(models[+b.dataset.m], preselect); }); });
     });
   }).catch(function (err) {
     $("result").innerHTML = '<div class="notice warn">Couldn’t reach the card catalog. Check the wifi and try again. (' + esc(err.message) + ")</div>";
@@ -1148,7 +1192,7 @@ function openItem(it) {
       variants: [{ id: "normal", label: "Normal", price: null }, { id: "holo", label: "Holo", price: null }, { id: "reverse", label: "Reverse holo", price: null }] };
     if (!model.variants.some(function (v) { return v.id === it.variantId; })) model.variants.push({ id: it.variantId, label: it.variantLabel, price: null });
     openCard(model, pre);
-  } else runFind(it.setId, it.localId, pre);
+  } else runFind(it.setId, it.localId, pre, it.lang);
 }
 
 /* ---------- log view ---------- */
@@ -1604,7 +1648,7 @@ function readPendingPhoto() {
     $("numInput").value = r.number || "";
     var line = esc(toEnglishName(r.name) || r.name || "Card") + " · " + esc(LANGS[lang].label) + " · set " + esc(r.set_code || "?") + " · #" + esc(r.number || "?");
     renderPendingPhoto("<div><b>Read from photo:</b> " + line + '<br><span class="muted">Check the set code and number match the card.' + (r.notes ? " " + esc(r.notes) : "") + "</span></div>");
-    if (r.set_code || r.set_name) runFind($("setInput").value, $("numInput").value);
+    if (r.set_code || r.set_name) runFind($("setInput").value, $("numInput").value, null, lang);
   }).catch(function (err) { renderPendingPhoto('<div class="notice warn">' + esc(err.message) + "</div>"); });
 }
 $("scanFile").addEventListener("change", function () {
