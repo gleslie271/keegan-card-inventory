@@ -1,0 +1,1199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1d2a4a">
+<title>Keegan's Card Stand</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: one phone-width column, sticky header, bottom tab bar. Ink-navy ground with a binder-red accent. */
+:root {
+  --bg: #f3f4f8;
+  --surface: #ffffff;
+  --surface-2: #e9ebf2;
+  --fg: #161b2e;
+  --muted: #5d6479;
+  --line: #d6d9e3;
+  --ink: #1d2a4a;
+  --ink-fg: #ffffff;
+  --accent: #c8323b;
+  --accent-fg: #ffffff;
+  --buy: #18794e;
+  --buy-fg: #ffffff;
+  --buy-soft: #e3f3ea;
+  --sell-soft: #fbe6e7;
+  --warn: #9a5b00;
+  --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --radius: 12px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1320; --surface: #181d2e; --surface-2: #222842; --fg: #e8eaf2; --muted: #9aa1b8;
+    --line: #2d3450; --ink: #0b0f1c; --ink-fg: #e8eaf2; --accent: #ef5a62; --accent-fg: #1a0a0b;
+    --buy: #3fbf7f; --buy-fg: #06180f; --buy-soft: #133024; --sell-soft: #3a1a1d; --warn: #e0a64a;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--fg); font: 15px/1.45 var(--font-body);
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--ink); }
+button, input, select { font: inherit; color: inherit; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+.wrap { max-width: 560px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--ink); color: var(--ink-fg); }
+header.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 12px; }
+header.top h1 { margin: 0; font: 700 18px/1.1 var(--font-display); letter-spacing: .2px; }
+.event-chip { border: 1px solid rgba(255,255,255,.35); background: transparent; color: var(--ink-fg); border-radius: 999px; padding: 4px 12px; font-size: 13px; cursor: pointer; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+main .wrap { padding-block: 16px; display: grid; gap: 16px; }
+h2 { font: 700 20px/1.2 var(--font-display); margin: 0; }
+h3 { font: 600 13px/1.2 var(--font-body); margin: 0; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; display: grid; gap: 12px; min-width: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.num { font-variant-numeric: tabular-nums; }
+
+label.f { display: grid; gap: 4px; font-size: 13px; color: var(--muted); min-width: 0; }
+input[type=text], input[type=number], input[type=search], select {
+  width: 100%; min-width: 0; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--fg); font-size: 16px;
+}
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+.row > * { flex: 1 1 120px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.seg { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 3px; }
+.seg button { border: 0; background: transparent; padding: 8px 4px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 11px 14px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; color: var(--fg); display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.btn.primary { background: var(--ink); color: var(--ink-fg); border-color: var(--ink); }
+@media (prefers-color-scheme: dark) { .btn.primary { background: var(--surface-2); border-color: var(--line); } }
+.btn.small { padding: 7px 10px; font-size: 13px; }
+.btn.danger { color: var(--accent); }
+.bigbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.bigbtn { border: 0; border-radius: 12px; padding: 16px 10px; font: 700 18px/1.1 var(--font-display); cursor: pointer; display: grid; gap: 4px; }
+.bigbtn small { font: 500 13px/1.2 var(--font-body); opacity: .9; }
+.bigbtn.buy { background: var(--buy); color: var(--buy-fg); }
+.bigbtn.sell { background: var(--accent); color: var(--accent-fg); }
+.bigbtn:disabled { opacity: .4; cursor: not-allowed; }
+
+.cardhead { display: grid; grid-template-columns: 96px 1fr; gap: 14px; align-items: start; }
+.cardhead .art { width: 96px; aspect-ratio: 63/88; border-radius: 6px; background: var(--surface-2); overflow: hidden; display: grid; place-items: center; color: var(--muted); font-size: 11px; text-align: center; }
+.cardhead .art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cardhead .name { font: 700 20px/1.2 var(--font-display); margin: 0 0 4px; overflow-wrap: anywhere; }
+.badge { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 2px 7px; border-radius: 999px; background: var(--surface-2); color: var(--muted); vertical-align: middle; }
+.badge.ja { background: #fde8e8; color: #9b1c1c; }
+.badge.zh { background: #fff3d6; color: #7a4b00; }
+.badge.en { background: #e4ecfb; color: #1e3a8a; }
+@media (prefers-color-scheme: dark) { .badge.ja { background: #3a1a1d; color: #f5a3a8; } .badge.zh { background: #3a2c10; color: #f3cc7a; } .badge.en { background: #172544; color: #a9c1f5; } }
+
+.market { display: grid; gap: 2px; }
+.market .price { font: 700 34px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.market .src { font-size: 12px; color: var(--muted); }
+.quote { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.quote .q { border-radius: 10px; padding: 10px; display: grid; gap: 6px; }
+.quote .q.b { background: var(--buy-soft); }
+.quote .q.s { background: var(--sell-soft); }
+.quote .q .lbl { font-size: 12px; font-weight: 600; color: var(--muted); }
+.money { position: relative; }
+.money::before { content: "$"; position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 16px; }
+.money input { padding-left: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stepper { display: grid; grid-template-columns: 44px 1fr 44px; gap: 6px; }
+.stepper button { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; font-size: 20px; cursor: pointer; }
+.stepper input { text-align: center; }
+.stockline { font-size: 14px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
+.links { display: flex; flex-wrap: wrap; gap: 8px; }
+.notice { font-size: 13px; padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--line); color: var(--muted); }
+.notice.warn { color: var(--warn); border-color: currentColor; }
+
+.list { display: grid; gap: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.item { display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--line); background: transparent; border-left: 0; border-right: 0; border-bottom: 0; text-align: left; width: 100%; cursor: pointer; color: var(--fg); }
+.item:first-child { border-top: 0; }
+.item .thumb { width: 44px; aspect-ratio: 63/88; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.item .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.item .t { min-width: 0; }
+.item .t b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item .r { text-align: right; font-variant-numeric: tabular-nums; }
+.pill { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; letter-spacing: .04em; }
+.pill.buy { background: var(--buy-soft); color: var(--buy); }
+.pill.sell { background: var(--sell-soft); color: var(--accent); }
+.pos { color: var(--buy); } .neg { color: var(--accent); }
+.daylabel { padding: 8px 12px; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--surface-2); border-top: 1px solid var(--line); }
+.daylabel:first-child { border-top: 0; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.stat { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; }
+.stat .v { font: 700 22px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+.stat .k { font-size: 12px; color: var(--muted); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+td, th { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.tablewrap { overflow-x: auto; }
+
+nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px); }
+nav.tabs .wrap { display: grid; grid-template-columns: repeat(5, 1fr); }
+nav.tabs button { border: 0; background: transparent; padding: 10px 2px 12px; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; display: grid; justify-items: center; gap: 3px; }
+nav.tabs button svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+nav.tabs button[aria-current="page"] { color: var(--accent); }
+
+#toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom, 0px)); z-index: 20; background: var(--ink); color: var(--ink-fg); border-radius: 12px; padding: 10px 12px 10px 16px; display: flex; gap: 12px; align-items: center; box-shadow: 0 6px 24px rgba(0,0,0,.25); max-width: calc(100% - 32px); font-size: 14px; }
+@media (prefers-color-scheme: dark) { #toast { background: var(--surface-2); } }
+#toast button { background: transparent; border: 1px solid rgba(255,255,255,.4); color: inherit; border-radius: 8px; padding: 5px 10px; cursor: pointer; font-weight: 600; }
+.scanbtn { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.scanbtn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+.scanprev { display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: center; }
+.scanprev img { width: 72px; border-radius: 6px; display: block; }
+.spinner { width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <h1>Keegan's Card Stand</h1>
+  <button class="event-chip" id="eventChip" type="button" title="Set the current show">No show set</button>
+</div></header>
+
+<main><div class="wrap">
+
+<!-- LOOK UP -->
+<section id="v-lookup" data-view>
+  <form class="panel" id="findForm" autocomplete="off">
+    <div class="seg" id="langSeg" role="group" aria-label="Card language">
+      <button type="button" data-lang="ja">Japanese</button>
+      <button type="button" data-lang="zh-tw">中文 繁</button>
+      <button type="button" data-lang="zh-cn">中文 简</button>
+      <button type="button" data-lang="en">English</button>
+    </div>
+    <div class="row">
+      <label class="f" style="flex:1.2 1 140px">Set code
+        <input type="text" id="setInput" list="setList" placeholder="e.g. SV2a" autocapitalize="off" spellcheck="false">
+        <datalist id="setList"></datalist>
+      </label>
+      <label class="f" style="flex:1 1 110px">Card number
+        <input type="text" id="numInput" placeholder="e.g. 201 or 201/165" inputmode="text" spellcheck="false">
+      </label>
+    </div>
+    <button class="btn scanbtn" type="button" id="scanBtn"><svg viewBox="0 0 24 24"><path d="M4 8.5V7a2 2 0 0 1 2-2h2l1.5-2h5L16 5h2a2 2 0 0 1 2 2v1.5M4 11v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><circle cx="12" cy="12.5" r="3.5"/></svg>Scan a card with the camera</button>
+    <input type="file" id="scanFile" accept="image/*" capture="environment" hidden>
+    <div id="scanStatus" hidden></div>
+    <div class="row">
+      <button class="btn primary" type="submit" id="findBtn">Find card</button>
+      <button class="btn" type="button" id="manualBtn" style="flex:0 1 auto">Add by hand</button>
+    </div>
+    <div class="small muted" id="setHint">The set code is printed at the bottom left of the card, next to the number.</div>
+  </form>
+  <div id="result" style="display:grid;gap:16px;margin-top:16px"></div>
+</section>
+
+<!-- STOCK -->
+<section id="v-stock" data-view hidden>
+  <div style="display:grid;gap:12px">
+    <h2>Stock</h2>
+    <div class="row">
+      <input type="search" id="stockSearch" placeholder="Search name, set or number" style="flex:2 1 180px">
+      <select id="stockSort" style="flex:1 1 120px" aria-label="Sort stock">
+        <option value="recent">Newest in</option>
+        <option value="oldest">Sitting longest</option>
+        <option value="value">Highest value</option>
+        <option value="name">Name</option>
+      </select>
+    </div>
+    <div class="small muted" id="stockSummary"></div>
+    <div id="stockList"></div>
+  </div>
+</section>
+
+<!-- LOG -->
+<section id="v-log" data-view hidden>
+  <div style="display:grid;gap:12px">
+    <h2>Buy and sell log</h2>
+    <div class="seg" id="logSeg" role="group" aria-label="Filter log" style="grid-template-columns:repeat(3,1fr)">
+      <button type="button" data-f="all" aria-pressed="true">All</button>
+      <button type="button" data-f="buy">Buys</button>
+      <button type="button" data-f="sell">Sales</button>
+    </div>
+    <div id="logList"></div>
+  </div>
+</section>
+
+<!-- REPORTS -->
+<section id="v-reports" data-view hidden>
+  <div style="display:grid;gap:16px" id="reportsBody"></div>
+</section>
+
+<!-- SETTINGS -->
+<section id="v-settings" data-view hidden>
+  <div style="display:grid;gap:16px">
+    <h2>Settings</h2>
+    <div class="panel">
+      <label class="f">Current show or event (tagged on every buy and sale)
+        <input type="text" id="setEvent" placeholder="e.g. Dallas Card Show, Nov 29">
+      </label>
+      <label class="f">Buy offer, as % of market
+        <input type="number" id="setPct" min="1" max="100" step="1">
+      </label>
+    </div>
+    <div class="panel">
+      <h3>Photo scanning</h3>
+      <div class="small muted">Scanning sends the card photo to Claude, which reads the set code, number and language. It needs a Claude API key from console.anthropic.com. API use is billed there per photo, separately from any Claude subscription, and costs about a cent or less per scan. Set a monthly spending limit in the Console to be safe.</div>
+      <label class="f">Claude API key
+        <input type="password" id="setApiKey" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
+      </label>
+      <label class="f">Model
+        <select id="setModel">
+          <option value="claude-opus-5-5">Claude Opus 5.5 (most accurate, about 1¢ a scan)</option>
+          <option value="claude-haiku-5-5">Claude Haiku 5.5 (cheapest, a fraction of a cent)</option>
+        </select>
+      </label>
+      <div class="small muted" id="keyNote"></div>
+    </div>
+    <div class="panel">
+      <h3>Japanese card prices</h3>
+      <div class="small muted">Japanese prices come from Cardmarket (Europe) in euros, through TCGdex, and are converted to dollars. They run lower than US prices for many cards, so treat them as a floor and use the eBay button to check.</div>
+      <div class="row">
+        <label class="f">Euro to dollar rate
+          <input type="number" id="setRate" step="0.0001" min="0.5" max="2">
+        </label>
+        <button class="btn" type="button" id="rateBtn" style="flex:0 1 auto">Get today's rate</button>
+      </div>
+      <div class="small muted" id="rateNote"></div>
+    </div>
+    <div class="panel">
+      <h3>Sample cards for testing</h3>
+      <div class="small muted">Adds about 20 real Japanese, Chinese and English cards with made-up buys and sales from three past shows, so the stock, log and reports have something in them. Sample entries are marked and can be removed without touching real ones.</div>
+      <div class="row">
+        <button class="btn" type="button" id="sampleAdd">Add sample cards</button>
+        <button class="btn danger" type="button" id="sampleRemove">Remove sample cards</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Backup</h3>
+      <div class="small muted">Everything is saved in this browser on this device only. Download a backup now and then, and use it to move to another phone.</div>
+      <div class="row">
+        <button class="btn" type="button" id="exportBtn">Download backup</button>
+        <label class="btn" for="importFile" style="flex:1 1 120px">Restore backup</label>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+      </div>
+      <button class="btn danger" type="button" id="resetBtn">Erase all data</button>
+      <div class="small" id="resetConfirm" hidden>
+        <div class="notice warn">This deletes every card and every buy and sale on this device. It can't be undone unless you have a backup.</div>
+        <div class="row" style="margin-top:8px"><button class="btn danger" type="button" id="resetYes">Yes, erase everything</button><button class="btn" type="button" id="resetNo">Keep my data</button></div>
+      </div>
+    </div>
+    <div class="small muted">Card data and prices: TCGdex (tcgdex.dev). English prices are TCGplayer market prices. Chinese cards have no price source, so you set the price yourself.</div>
+  </div>
+</section>
+
+</div></main>
+
+<nav class="tabs" aria-label="Sections"><div class="wrap">
+  <button type="button" data-tab="lookup" aria-current="page"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>Look up</button>
+  <button type="button" data-tab="stock"><svg viewBox="0 0 24 24"><rect x="4" y="3.5" width="12" height="16" rx="2"/><path d="M8 20.5h10a2 2 0 0 0 2-2V7"/></svg>Stock</button>
+  <button type="button" data-tab="log"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg>Log</button>
+  <button type="button" data-tab="reports"><svg viewBox="0 0 24 24"><path d="M5 20V11M12 20V5M19 20v-7"/></svg>Reports</button>
+  <button type="button" data-tab="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg>Settings</button>
+</div></nav>
+
+<div id="toast" hidden><span id="toastMsg"></span><button type="button" id="toastUndo">Undo</button></div>
+
+<script>
+(function () {
+"use strict";
+
+/* ---------- constants ---------- */
+var API = "https://api.tcgdex.net/v2/";
+var STORE_KEY = "keeganCardStand.v1";
+var LANGS = {
+  "ja":    { label: "Japanese", badge: "JP", cls: "ja", word: "japanese" },
+  "zh-tw": { label: "Chinese (Traditional)", badge: "中繁", cls: "zh", word: "chinese" },
+  "zh-cn": { label: "Chinese (Simplified)", badge: "中简", cls: "zh", word: "chinese" },
+  "en":    { label: "English", badge: "EN", cls: "en", word: "" }
+};
+var CONDITIONS = ["NM", "LP", "MP", "HP", "DMG"];
+var DAY = 86400000;
+
+/* ---------- storage ---------- */
+function blank() {
+  return { settings: { buyPct: 70, eurUsd: 1.09, eurUsdDate: "", event: "", lang: "ja" }, items: {}, tx: [], myPrices: {} };
+}
+function load() {
+  try {
+    var raw = localStorage.getItem(STORE_KEY);
+    if (raw) {
+      var s = JSON.parse(raw);
+      var b = blank();
+      s.settings = Object.assign(b.settings, s.settings || {});
+      s.items = s.items || {}; s.tx = s.tx || []; s.myPrices = s.myPrices || {};
+      return s;
+    }
+  } catch (e) {}
+  return blank();
+}
+var S = load();
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); }
+  catch (e) { toast("Couldn't save on this device. Download a backup from Settings."); }
+}
+
+/* ---------- helpers ---------- */
+function $(id) { return document.getElementById(id); }
+function esc(v) { return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+function money(n) { if (n == null || isNaN(n)) return "–"; var neg = n < 0; n = Math.abs(n); return (neg ? "−$" : "$") + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+function num(v) { var n = parseFloat(String(v).replace(/[$,\s]/g, "")); return isNaN(n) ? null : n; }
+function niceOffer(n) { if (n == null) return null; if (n >= 20) return Math.floor(n); return Math.round(n * 100) / 100; }
+function days(ts) { return Math.max(0, Math.floor((Date.now() - ts) / DAY)); }
+function dateLabel(ts) { var d = new Date(ts); return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }); }
+function timeLabel(ts) { return new Date(ts).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function imgUrl(base, q) { return base ? base + "/" + (q || "low") + ".webp" : ""; }
+function langBadge(lang) { var L = LANGS[lang] || { badge: lang, cls: "" }; return '<span class="badge ' + L.cls + '">' + esc(L.badge) + "</span>"; }
+function itemKey(lang, cardId, variantId, cond) { return [lang, cardId, variantId, cond].join("|"); }
+function priceKey(lang, cardId, variantId) { return [lang, cardId, variantId].join("|"); }
+
+var cache = {};
+function getJSON(url) {
+  if (cache[url]) return cache[url];
+  var p = fetch(url).then(function (r) {
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  });
+  cache[url] = p;
+  p.catch(function () { delete cache[url]; });
+  return p;
+}
+function getJSONQuiet(url) { return getJSON(url).catch(function () { return null; }); }
+
+/* ---------- toast ---------- */
+var toastTimer = null, toastUndoFn = null;
+function toast(msg, undoFn) {
+  $("toastMsg").textContent = msg;
+  toastUndoFn = undoFn || null;
+  $("toastUndo").hidden = !undoFn;
+  $("toast").hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { $("toast").hidden = true; }, undoFn ? 7000 : 3500);
+}
+$("toastUndo").addEventListener("click", function () { if (toastUndoFn) toastUndoFn(); $("toast").hidden = true; });
+
+/* ---------- tabs ---------- */
+var VIEWS = ["lookup", "stock", "log", "reports", "settings"];
+function show(view) {
+  VIEWS.forEach(function (v) { $("v-" + v).hidden = v !== view; });
+  document.querySelectorAll("nav.tabs button").forEach(function (b) {
+    if (b.dataset.tab === view) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+  });
+  if (view === "stock") renderStock();
+  if (view === "log") renderLog();
+  if (view === "reports") renderReports();
+  if (view === "settings") renderSettings();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll("nav.tabs button").forEach(function (b) { b.addEventListener("click", function () { show(b.dataset.tab); }); });
+$("eventChip").addEventListener("click", function () { show("settings"); setTimeout(function () { $("setEvent").focus(); }, 50); });
+function renderEventChip() { $("eventChip").textContent = S.settings.event ? S.settings.event : "No show set"; }
+
+/* ---------- catalog ---------- */
+var setsByLang = {};
+function loadSets(lang) {
+  if (setsByLang[lang]) return Promise.resolve(setsByLang[lang]);
+  var ck = "kcs.sets." + lang, cached = null;
+  try { cached = JSON.parse(localStorage.getItem(ck) || "null"); } catch (e) {}
+  if (cached && Date.now() - cached.at < 3 * DAY) { setsByLang[lang] = cached.sets; return Promise.resolve(cached.sets); }
+  return getJSON(API + lang + "/sets").then(function (sets) {
+    sets = (sets || []).map(function (s) { return { id: s.id, name: s.name, official: s.cardCount && s.cardCount.official }; });
+    setsByLang[lang] = sets;
+    try { localStorage.setItem(ck, JSON.stringify({ at: Date.now(), sets: sets })); } catch (e) {}
+    return sets;
+  });
+}
+function fillSetList(lang) {
+  var dl = $("setList"); dl.innerHTML = "";
+  loadSets(lang).then(function (sets) {
+    if (S.settings.lang !== lang) return;
+    var frag = document.createDocumentFragment();
+    sets.slice().reverse().forEach(function (s) { var o = document.createElement("option"); o.value = s.id; o.label = s.name; frag.appendChild(o); });
+    dl.appendChild(frag);
+  }).catch(function () {});
+}
+function resolveSet(sets, input) {
+  var q = input.trim().toLowerCase(); if (!q) return [];
+  var exact = sets.filter(function (s) { return s.id.toLowerCase() === q; });
+  if (exact.length) return exact;
+  var byName = sets.filter(function (s) { return (s.name || "").toLowerCase().indexOf(q) >= 0; });
+  if (!byName.length) byName = sets.filter(function (s) { var n = (s.name || "").toLowerCase(); return n.length > 2 && q.indexOf(n) >= 0; });
+  return byName.slice(0, 12);
+}
+function normNum(n) { return String(n).split("/")[0].trim().replace(/^#/, ""); }
+function sameNum(a, b) {
+  a = String(a).toLowerCase(); b = String(b).toLowerCase();
+  if (a === b) return true;
+  if (/^\d+$/.test(a) && /^\d+$/.test(b)) return parseInt(a, 10) === parseInt(b, 10);
+  return a.replace(/^0+/, "") === b.replace(/^0+/, "");
+}
+
+function findCard(lang, set, numberIn) {
+  var n = normNum(numberIn);
+  return getJSON(API + lang + "/sets/" + encodeURIComponent(set.id)).then(function (setFull) {
+    var tries = [];
+    var cards = (setFull && setFull.cards) || [];
+    var hit = cards.filter(function (c) { return sameNum(c.localId, n); })[0];
+    if (hit) tries.push(hit.id);
+    else {
+      tries.push(set.id + "-" + n);
+      if (/^\d+$/.test(n)) { tries.push(set.id + "-" + ("000" + parseInt(n, 10)).slice(-3)); tries.push(set.id + "-" + parseInt(n, 10)); }
+    }
+    var seen = {};
+    tries = tries.filter(function (t) { if (seen[t]) return false; seen[t] = 1; return true; });
+    var i = 0;
+    function next() {
+      if (i >= tries.length) return null;
+      return getJSONQuiet(API + lang + "/cards/" + encodeURIComponent(tries[i++])).then(function (c) { return c && c.id ? c : next(); });
+    }
+    return Promise.resolve(next()).then(function (card) {
+      return card ? toModel(lang, card, setFull || set) : null;
+    });
+  });
+}
+
+var TCG_KEYS = {
+  normal: ["normal", "unlimited", "unlimited-holofoil", "holofoil"],
+  holo: ["holofoil", "unlimited-holofoil", "normal"],
+  reverse: ["reverse-holofoil", "reverseHolofoil"],
+  firstEdition: ["1st-edition-holofoil", "1st-edition", "1stEditionHolofoil", "1stEdition"]
+};
+function variantLabel(v) {
+  var t = { normal: "Normal", holo: "Holo", reverse: "Reverse holo", firstEdition: "1st Edition", wPromo: "W Promo" }[v.type] || v.type || "Normal";
+  if (v.foil) t += " · " + String(v.foil).replace(/^\w/, function (c) { return c.toUpperCase(); }) + " foil";
+  if (v.stamp && v.stamp.length) t += " · " + v.stamp.join(", ") + " stamp";
+  if (v.size && v.size !== "standard") t += " · " + v.size;
+  return t;
+}
+function priceFor(v, card) {
+  var tcg = (v.pricing && v.pricing.tcgplayer) || (!v.pricing && card.pricing && card.pricing.tcgplayer) || null;
+  if (tcg) {
+    var keys = TCG_KEYS[v.type] || TCG_KEYS.normal;
+    for (var i = 0; i < keys.length; i++) {
+      var p = tcg[keys[i]];
+      if (p && p.marketPrice > 0) return { usd: p.marketPrice, src: "TCGplayer market price", updated: tcg.updated, productId: p.productId };
+    }
+  }
+  var cm = (v.pricing && v.pricing.cardmarket) || (!v.pricing && card.pricing && card.pricing.cardmarket) || null;
+  if (cm) {
+    // Cardmarket keeps reverse holo prices in the "-holo" fields; holo rares use the plain fields.
+    var holoish = v.type === "reverse";
+    var order = holoish
+      ? [["avg30-holo", "30-day average"], ["trend-holo", "trend"], ["avg7-holo", "7-day average"], ["avg30", "30-day average"], ["trend", "trend"], ["low-holo", "lowest listing"]]
+      : [["avg30", "30-day average"], ["trend", "trend"], ["avg7", "7-day average"], ["avg", "average"], ["low", "lowest listing"]];
+    for (var j = 0; j < order.length; j++) {
+      var eur = cm[order[j][0]];
+      if (eur > 0) return { usd: eur * S.settings.eurUsd, eur: eur, src: "Cardmarket " + order[j][1] + ", €" + eur.toFixed(2) + " converted", updated: cm.updated };
+    }
+  }
+  return null;
+}
+function toModel(lang, card, set) {
+  var vs = card.variants_detailed && card.variants_detailed.length ? card.variants_detailed : null;
+  if (!vs) {
+    vs = [];
+    var f = card.variants || { normal: true };
+    ["normal", "holo", "reverse", "firstEdition"].forEach(function (t) { if (f[t]) vs.push({ type: t, variantId: t }); });
+    if (!vs.length) vs.push({ type: "normal", variantId: "normal" });
+  }
+  var variants = vs.map(function (v, i) {
+    return { id: v.variantId && v.variantId !== "generated" ? v.variantId : (v.type || "normal") + i, label: variantLabel(v), price: priceFor(v, card) };
+  });
+  var setObj = card.set || {};
+  return {
+    lang: lang, cardId: card.id, name: card.name, suffix: card.suffix || "",
+    setId: setObj.id || set.id, setName: setObj.name || set.name,
+    localId: card.localId, official: (setObj.cardCount && setObj.cardCount.official) || set.official || "",
+    rarity: card.rarity || "", image: card.image || "", dexId: (card.dexId && card.dexId[0]) || null,
+    variants: variants, manual: false
+  };
+}
+
+/* English name for eBay searches on Japanese and Chinese cards */
+function englishName(model) {
+  if (model.lang === "en" || !model.dexId) return Promise.resolve(null);
+  return getJSONQuiet(API + "en/cards?dexId=eq:" + model.dexId + "&pagination:itemsPerPage=1").then(function (r) {
+    if (!r || !r[0]) return null;
+    return r[0].name.replace(/\s+(ex|EX|GX|V|VMAX|VSTAR|LV\.X|BREAK|Prime|LEGEND|δ).*$/, "").trim();
+  });
+}
+
+/* ---------- look up view ---------- */
+var current = null; // { model, variantIdx, cond, dirty: {buy, sell} }
+
+function setLang(lang) {
+  S.settings.lang = lang; save();
+  document.querySelectorAll("#langSeg button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.lang === lang)); });
+  $("setInput").placeholder = { ja: "e.g. SV2a", "zh-tw": "e.g. SC2a", "zh-cn": "e.g. CSM1aC", en: "e.g. sv03.5" }[lang];
+  fillSetList(lang);
+}
+document.querySelectorAll("#langSeg button").forEach(function (b) { b.addEventListener("click", function () { setLang(b.dataset.lang); }); });
+
+$("findForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+  runFind($("setInput").value, $("numInput").value);
+});
+$("manualBtn").addEventListener("click", function () {
+  openManual({ lang: S.settings.lang, setId: $("setInput").value.trim(), localId: normNum($("numInput").value || "") });
+});
+
+function busy(msg) { $("result").innerHTML = '<div class="panel"><div><span class="spinner"></span> <span class="muted">' + esc(msg) + "</span></div></div>"; }
+
+function runFind(setIn, numIn, preselect) {
+  var lang = S.settings.lang;
+  if (!setIn.trim() || !numIn.trim()) { $("result").innerHTML = '<div class="notice">Type the set code and the card number, then tap Find card.</div>'; return; }
+  busy("Looking up the card…");
+  loadSets(lang).then(function (sets) {
+    var matches = resolveSet(sets, setIn);
+    if (!matches.length) {
+      notFound(lang, setIn, numIn, "No " + LANGS[lang].label + " set has the code “" + setIn.trim() + "”. Check the code on the card, or pick one from the suggestions as you type.");
+      return;
+    }
+    if (matches.length > 1) {
+      var html = '<div class="panel"><h3>Which set?</h3><div class="list">';
+      matches.forEach(function (s, i) { html += '<button type="button" class="item" data-i="' + i + '" style="grid-template-columns:1fr auto"><span class="t"><b>' + esc(s.name) + '</b><span class="small muted">' + esc(s.id) + "</span></span><span>›</span></button>"; });
+      $("result").innerHTML = html + "</div></div>";
+      $("result").querySelectorAll("[data-i]").forEach(function (b) { b.addEventListener("click", function () { var s = matches[+b.dataset.i]; $("setInput").value = s.id; runFind(s.id, numIn, preselect); }); });
+      return;
+    }
+    return findCard(lang, matches[0], numIn).then(function (model) {
+      if (!model) { notFound(lang, matches[0].id, numIn, "Set " + matches[0].id + " (" + matches[0].name + ") has no card number " + normNum(numIn) + " in the catalog."); return; }
+      openCard(model, preselect);
+    });
+  }).catch(function (err) {
+    $("result").innerHTML = '<div class="notice warn">Couldn’t reach the card catalog. Check the wifi and try again. (' + esc(err.message) + ")</div>";
+  });
+}
+
+function notFound(lang, setIn, numIn, why) {
+  $("result").innerHTML = '<div class="panel"><div class="notice warn">' + esc(why) + '</div><div class="small muted">Many Chinese sets and promos aren’t in the catalog yet. You can still add the card by hand and set your own price.</div><button class="btn" type="button" id="nfManual">Add this card by hand</button></div>';
+  $("nfManual").addEventListener("click", function () { openManual({ lang: lang, setId: setIn.trim(), localId: normNum(numIn) }); });
+}
+
+function openManual(pre, preselect) {
+  $("result").innerHTML =
+    '<form class="panel" id="manForm"><h3>Add a card by hand</h3>' +
+    '<label class="f">Card name<input type="text" id="manName" placeholder="e.g. Pikachu V" value="' + esc(pre.name || "") + '"></label>' +
+    '<div class="grid2"><label class="f">Set code<input type="text" id="manSet" value="' + esc(pre.setId || "") + '"></label>' +
+    '<label class="f">Number<input type="text" id="manNum" value="' + esc(pre.localId || "") + '"></label></div>' +
+    '<label class="f">Language<select id="manLang">' + Object.keys(LANGS).map(function (k) { return '<option value="' + k + '"' + (k === pre.lang ? " selected" : "") + ">" + esc(LANGS[k].label) + "</option>"; }).join("") + "</select></label>" +
+    '<button class="btn primary" type="submit">Continue</button></form>';
+  $("manForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var name = $("manName").value.trim(), set = $("manSet").value.trim(), n = normNum($("manNum").value);
+    if (!name) { $("manName").focus(); return; }
+    var model = {
+      lang: $("manLang").value, cardId: "manual:" + (set || "?") + "-" + (n || "?") + ":" + name.toLowerCase(),
+      name: name, setId: set, setName: "", localId: n, official: "", rarity: "", image: "", dexId: null, manual: true,
+      variants: [{ id: "normal", label: "Normal", price: null }, { id: "holo", label: "Holo", price: null }, { id: "reverse", label: "Reverse holo", price: null }]
+    };
+    openCard(model, preselect);
+  });
+  if (!pre.name) $("manName").focus();
+}
+
+function stockFor(model, variantId, cond) { return S.items[itemKey(model.lang, model.cardId, variantId, cond)] || null; }
+
+function openCard(model, preselect) {
+  var vIdx = 0;
+  if (preselect && preselect.variantId) { var k = model.variants.findIndex(function (v) { return v.id === preselect.variantId; }); if (k >= 0) vIdx = k; }
+  else {
+    // prefer a variant he already stocks, then one with a price
+    var stocked = model.variants.findIndex(function (v) { return CONDITIONS.some(function (c) { var it = stockFor(model, v.id, c); return it && it.qty > 0; }); });
+    var priced = model.variants.findIndex(function (v) { return v.price; });
+    vIdx = stocked >= 0 ? stocked : (priced >= 0 ? priced : 0);
+  }
+  current = { model: model, variantIdx: vIdx, cond: (preselect && preselect.cond) || "NM", qty: 1, dirty: { buy: false, sell: false } };
+  renderCard();
+  englishName(model).then(function (en) { if (current && current.model === model) { model.enName = en; renderLinks(); } });
+}
+
+function effMarket() {
+  var m = current.model, v = m.variants[current.variantIdx];
+  var mine = S.myPrices[priceKey(m.lang, m.cardId, v.id)];
+  if (mine != null) return { usd: mine, mine: true };
+  if (v.price) return { usd: v.price.usd, mine: false };
+  return { usd: null, mine: false };
+}
+
+function renderCard() {
+  var m = current.model, v = m.variants[current.variantIdx], L = LANGS[m.lang];
+  var art = m.image ? '<img alt="" src="' + esc(imgUrl(m.image)) + '" onerror="this.remove()">' : "No picture";
+  var html = '<div class="panel">' +
+    '<div class="cardhead"><div class="art">' + art + '</div><div style="min-width:0">' +
+    '<p class="name">' + esc(m.name) + "</p>" +
+    '<div class="small muted">' + langBadge(m.lang) + " " + esc(m.setName ? m.setName + " · " : "") + esc(m.setId) + " · #" + esc(m.localId) + (m.official ? "/" + esc(m.official) : "") + "</div>" +
+    (m.rarity ? '<div class="small muted">' + esc(m.rarity) + "</div>" : "") +
+    (m.manual ? '<div class="small muted">Added by hand</div>' : "") +
+    "</div></div>" +
+    '<div class="grid2">' +
+    '<label class="f">Version<select id="cVariant">' + m.variants.map(function (x, i) { return '<option value="' + i + '"' + (i === current.variantIdx ? " selected" : "") + ">" + esc(x.label) + "</option>"; }).join("") + "</select></label>" +
+    '<label class="f">Condition<select id="cCond">' + CONDITIONS.map(function (c) { return '<option' + (c === current.cond ? " selected" : "") + ">" + c + "</option>"; }).join("") + "</select></label>" +
+    "</div></div>" +
+    '<div class="panel" id="pricePanel"></div>';
+  $("result").innerHTML = html;
+  $("cVariant").addEventListener("change", function () { current.variantIdx = +this.value; current.dirty = { buy: false, sell: false }; renderPrice(); });
+  $("cCond").addEventListener("change", function () { current.cond = this.value; renderPrice(); });
+  renderPrice();
+}
+
+function renderPrice() {
+  var m = current.model, v = m.variants[current.variantIdx];
+  var mk = effMarket();
+  var pct = S.settings.buyPct / 100;
+  var item = stockFor(m, v.id, current.cond);
+  var inStock = item ? item.qty : 0;
+  var avg = item && item.qty > 0 ? item.cost / item.qty : null;
+
+  var src;
+  if (mk.mine) src = "Your price" + (v.price ? " · catalog says " + money(v.price.usd) : "");
+  else if (v.price) src = v.price.src + (v.price.updated ? " · " + new Date(v.price.updated).toLocaleDateString() : "");
+  else src = m.lang.indexOf("zh") === 0 ? "No price source for Chinese cards. Set your price below." : "No market price for this version. Set your price below.";
+
+  var html =
+    '<div class="market"><h3>Market price</h3><div class="price">' + (mk.usd != null ? money(mk.usd) : "—") + '</div><div class="src">' + esc(src) + "</div></div>" +
+    '<div class="row"><label class="f">Your price (overrides the market for this card)<div class="money"><input type="text" inputmode="decimal" id="cMine" placeholder="' + (v.price ? "Blank = market" : "Set a price") + '" value="' + (mk.mine ? esc(mk.usd.toFixed(2)) : "") + '"></div></label>' +
+    (mk.mine ? '<button class="btn small" type="button" id="cClearMine" style="flex:0 1 auto">Use market</button>' : "") + "</div>" +
+    '<div class="quote">' +
+    '<div class="q b"><span class="lbl">Buy offer (' + S.settings.buyPct + '%)</span><div class="money"><input type="text" inputmode="decimal" id="cBuy"></div></div>' +
+    '<div class="q s"><span class="lbl">Sell price</span><div class="money"><input type="text" inputmode="decimal" id="cSell"></div></div>' +
+    "</div>" +
+    '<label class="f">Quantity<div class="stepper"><button type="button" id="qMinus" aria-label="One fewer">−</button><input type="number" id="cQty" min="1" step="1" value="' + current.qty + '"><button type="button" id="qPlus" aria-label="One more">+</button></div></label>' +
+    '<div class="stockline num">' + (inStock > 0
+      ? "In stock: <b>" + inStock + "</b> · average cost " + money(avg) + " · first in " + days(item.firstIn) + " days ago"
+      : "None in stock in " + esc(current.cond) + ".") + "</div>" +
+    '<div id="profitLine" class="small num"></div>' +
+    '<div class="bigbtns"><button class="bigbtn buy" type="button" id="doBuy">Buy<small id="buyTotal"></small></button>' +
+    '<button class="bigbtn sell" type="button" id="doSell"' + (inStock > 0 ? "" : " disabled") + '>Sell<small id="sellTotal"></small></button></div>' +
+    '<div class="links" id="cLinks"></div>';
+  $("pricePanel").innerHTML = html;
+
+  if (!current.dirty.buy) $("cBuy").value = mk.usd != null ? niceOffer(mk.usd * pct).toFixed(2) : "";
+  if (!current.dirty.sell) $("cSell").value = mk.usd != null ? mk.usd.toFixed(2) : "";
+  if (current.dirty.buy && current.buyVal != null) $("cBuy").value = current.buyVal;
+  if (current.dirty.sell && current.sellVal != null) $("cSell").value = current.sellVal;
+
+  $("cMine").addEventListener("change", function () {
+    var n = num(this.value), k = priceKey(m.lang, m.cardId, v.id);
+    if (n == null || n <= 0) delete S.myPrices[k]; else S.myPrices[k] = Math.round(n * 100) / 100;
+    save(); current.dirty = { buy: false, sell: false }; renderPrice();
+  });
+  if ($("cClearMine")) $("cClearMine").addEventListener("click", function () { delete S.myPrices[priceKey(m.lang, m.cardId, v.id)]; save(); current.dirty = { buy: false, sell: false }; renderPrice(); });
+  $("cBuy").addEventListener("input", function () { current.dirty.buy = true; current.buyVal = this.value; updateTotals(); });
+  $("cSell").addEventListener("input", function () { current.dirty.sell = true; current.sellVal = this.value; updateTotals(); });
+  $("cQty").addEventListener("input", function () { current.qty = Math.max(1, parseInt(this.value, 10) || 1); updateTotals(); });
+  $("qMinus").addEventListener("click", function () { current.qty = Math.max(1, current.qty - 1); $("cQty").value = current.qty; updateTotals(); });
+  $("qPlus").addEventListener("click", function () { current.qty += 1; $("cQty").value = current.qty; updateTotals(); });
+  $("doBuy").addEventListener("click", doBuy);
+  $("doSell").addEventListener("click", doSell);
+  updateTotals();
+  renderLinks();
+}
+
+function updateTotals() {
+  var m = current.model, v = m.variants[current.variantIdx];
+  var q = current.qty, b = num($("cBuy").value), s = num($("cSell").value);
+  var item = stockFor(m, v.id, current.cond);
+  $("buyTotal").textContent = b != null ? q + " × " + money(b) + " = " + money(b * q) : "Enter an offer";
+  $("sellTotal").textContent = s != null ? q + " × " + money(s) + " = " + money(s * q) : "Enter a price";
+  var pl = $("profitLine"); pl.textContent = ""; pl.className = "small num";
+  if (item && item.qty > 0 && s != null) {
+    var avg = item.cost / item.qty, p = (s - avg) * Math.min(q, item.qty);
+    pl.textContent = "Profit if sold at " + money(s) + ": " + money(p) + (q > item.qty ? " (only " + item.qty + " in stock)" : "");
+    pl.className = "small num " + (p >= 0 ? "pos" : "neg");
+  }
+  $("doSell").disabled = !(item && item.qty >= q);
+}
+
+function renderLinks() {
+  if (!current || !$("cLinks")) return;
+  var m = current.model, v = m.variants[current.variantIdx];
+  var name = m.lang === "en" ? m.name : (m.enName || m.name);
+  var q = ["pokemon", name, m.setId, m.localId + (m.official ? "/" + m.official : ""), LANGS[m.lang].word].filter(Boolean).join(" ");
+  var html = '<a class="btn small" target="_blank" rel="noopener" href="https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(q) + '&LH_Sold=1&LH_Complete=1">eBay sold listings ↗</a>';
+  if (v.price && v.price.productId) html += '<a class="btn small" target="_blank" rel="noopener" href="https://www.tcgplayer.com/product/' + encodeURIComponent(v.price.productId) + '">TCGplayer ↗</a>';
+  if (m.lang !== "en") html += '<a class="btn small" target="_blank" rel="noopener" href="https://www.pricecharting.com/search-products?type=prices&q=' + encodeURIComponent(name + " " + m.localId + " " + LANGS[m.lang].word) + '">PriceCharting ↗</a>';
+  $("cLinks").innerHTML = html;
+}
+
+/* ---------- buy / sell ---------- */
+function snapshotOf(item) { return item ? { qty: item.qty, cost: item.cost, firstIn: item.firstIn, lastIn: item.lastIn } : null; }
+
+function ensureItem() {
+  var m = current.model, v = m.variants[current.variantIdx], key = itemKey(m.lang, m.cardId, v.id, current.cond);
+  var it = S.items[key];
+  if (!it) {
+    it = S.items[key] = { key: key, lang: m.lang, cardId: m.cardId, name: m.name, setId: m.setId, setName: m.setName, localId: m.localId, official: m.official,
+      image: m.image, manual: !!m.manual, variantId: v.id, variantLabel: v.label, cond: current.cond, qty: 0, cost: 0, firstIn: null, lastIn: null, market: null };
+  }
+  return it;
+}
+
+function record(type, unit) {
+  var q = current.qty, it = ensureItem(), before = snapshotOf(it), now = Date.now(), mk = effMarket();
+  var tx = { id: uid(), ts: now, type: type, key: it.key, name: it.name, lang: it.lang, setId: it.setId, localId: it.localId, variantLabel: it.variantLabel, cond: it.cond,
+    qty: q, unit: unit, market: mk.usd, event: S.settings.event || "", before: before };
+  if (type === "buy") {
+    if (it.qty <= 0) it.firstIn = now;
+    it.qty += q; it.cost += unit * q; it.lastIn = now;
+  } else {
+    var avg = it.cost / it.qty;
+    tx.costBasis = avg * q; tx.profit = unit * q - tx.costBasis; tx.daysHeld = it.firstIn ? days(it.firstIn) : null;
+    it.qty -= q; it.cost = it.qty > 0 ? it.cost - avg * q : 0;
+    if (it.qty <= 0) { it.qty = 0; it.firstIn = null; }
+  }
+  if (mk.usd != null) { it.market = mk.usd; it.marketAt = now; }
+  S.tx.push(tx); save();
+  return tx;
+}
+
+function undoTx(id) {
+  var i = S.tx.findIndex(function (t) { return t.id === id; });
+  if (i < 0) return;
+  var t = S.tx[i], it = S.items[t.key];
+  var later = S.tx.slice(i + 1).some(function (x) { return x.key === t.key; });
+  if (later) { toast("Undo the newer entries for this card first."); return; }
+  if (it) {
+    if (t.before) { it.qty = t.before.qty; it.cost = t.before.cost; it.firstIn = t.before.firstIn; it.lastIn = t.before.lastIn; }
+    else delete S.items[t.key];
+  }
+  S.tx.splice(i, 1); save();
+  toast("Undone.");
+  if (current && !$("v-lookup").hidden && $("pricePanel")) renderPrice();
+  if (!$("v-log").hidden) renderLog();
+}
+
+function doBuy() {
+  var unit = num($("cBuy").value);
+  if (unit == null || unit < 0) { $("cBuy").focus(); toast("Enter what you're paying per card."); return; }
+  var t = record("buy", unit);
+  toast("Bought " + t.qty + " × " + t.name + " for " + money(unit * t.qty), function () { undoTx(t.id); });
+  current.dirty = { buy: false, sell: false }; current.qty = 1; renderPrice();
+}
+function doSell() {
+  var unit = num($("cSell").value);
+  if (unit == null || unit < 0) { $("cSell").focus(); toast("Enter the sale price per card."); return; }
+  var t = record("sell", unit);
+  toast("Sold " + t.qty + " × " + t.name + " · profit " + money(t.profit), function () { undoTx(t.id); });
+  current.dirty = { buy: false, sell: false }; current.qty = 1; renderPrice();
+}
+
+/* ---------- stock view ---------- */
+$("stockSearch").addEventListener("input", renderStock);
+$("stockSort").addEventListener("change", renderStock);
+function renderStock() {
+  var q = $("stockSearch").value.trim().toLowerCase(), sort = $("stockSort").value;
+  var items = Object.keys(S.items).map(function (k) { return S.items[k]; }).filter(function (it) { return it.qty > 0; });
+  var totalQty = 0, totalCost = 0, totalMkt = 0, unpriced = 0;
+  items.forEach(function (it) { totalQty += it.qty; totalCost += it.cost; if (it.market != null) totalMkt += it.market * it.qty; else unpriced += it.qty; });
+  $("stockSummary").textContent = items.length
+    ? totalQty + " cards · cost " + money(totalCost) + " · market about " + money(totalMkt) + (unpriced ? " (" + unpriced + " unpriced)" : "")
+    : "";
+  if (q) items = items.filter(function (it) { return [it.name, it.setId, it.setName, it.localId, it.variantLabel].join(" ").toLowerCase().indexOf(q) >= 0; });
+  items.sort(function (a, b) {
+    if (sort === "oldest") return (a.firstIn || 0) - (b.firstIn || 0);
+    if (sort === "value") return (b.market || 0) * b.qty - (a.market || 0) * a.qty;
+    if (sort === "name") return String(a.name).localeCompare(String(b.name));
+    return (b.lastIn || 0) - (a.lastIn || 0);
+  });
+  if (!items.length) {
+    $("stockList").innerHTML = '<div class="notice">' + (q ? "No cards in stock match “" + esc(q) + "”." : "No cards in stock yet. Look up a card and tap Buy to add it.") + "</div>";
+    return;
+  }
+  var html = '<div class="list">';
+  items.forEach(function (it) {
+    html += '<button type="button" class="item" data-key="' + esc(it.key) + '">' +
+      '<span class="thumb">' + (it.image ? '<img alt="" loading="lazy" src="' + esc(imgUrl(it.image)) + '" onerror="this.remove()">' : "") + "</span>" +
+      '<span class="t"><b>' + esc(it.name) + '</b><span class="small muted">' + langBadge(it.lang) + " " + esc(it.setId) + " #" + esc(it.localId) + " · " + esc(it.variantLabel) + " · " + esc(it.cond) + "</span>" +
+      '<span class="small muted" style="display:block">' + (it.firstIn ? days(it.firstIn) + " days in stock" : "") + "</span></span>" +
+      '<span class="r"><b>×' + it.qty + '</b><br><span class="small muted">cost ' + money(it.cost / it.qty) + "</span><br><span class=\"small\">mkt " + money(it.market) + "</span></span></button>";
+  });
+  $("stockList").innerHTML = html + "</div>";
+  $("stockList").querySelectorAll("[data-key]").forEach(function (b) { b.addEventListener("click", function () { openItem(S.items[b.dataset.key]); }); });
+}
+function openItem(it) {
+  show("lookup");
+  setLang(it.lang);
+  $("setInput").value = it.setId; $("numInput").value = it.localId;
+  var pre = { variantId: it.variantId, cond: it.cond };
+  if (it.manual) {
+    var model = { lang: it.lang, cardId: it.cardId, name: it.name, setId: it.setId, setName: it.setName || "", localId: it.localId, official: "", rarity: "", image: "", dexId: null, manual: true,
+      variants: [{ id: "normal", label: "Normal", price: null }, { id: "holo", label: "Holo", price: null }, { id: "reverse", label: "Reverse holo", price: null }] };
+    if (!model.variants.some(function (v) { return v.id === it.variantId; })) model.variants.push({ id: it.variantId, label: it.variantLabel, price: null });
+    openCard(model, pre);
+  } else runFind(it.setId, it.localId, pre);
+}
+
+/* ---------- log view ---------- */
+var logFilter = "all";
+document.querySelectorAll("#logSeg button").forEach(function (b) {
+  b.addEventListener("click", function () {
+    logFilter = b.dataset.f;
+    document.querySelectorAll("#logSeg button").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+    renderLog();
+  });
+});
+function renderLog() {
+  var list = S.tx.slice().reverse().filter(function (t) { return logFilter === "all" || t.type === logFilter; });
+  if (!list.length) { $("logList").innerHTML = '<div class="notice">Nothing here yet. Buys and sales show up here as you make them.</div>'; return; }
+  var html = '<div class="list">', lastDay = "";
+  list.slice(0, 300).forEach(function (t) {
+    var d = dateLabel(t.ts);
+    if (d !== lastDay) { html += '<div class="daylabel">' + esc(d) + "</div>"; lastDay = d; }
+    html += '<div class="item" style="cursor:default;grid-template-columns:auto 1fr auto">' +
+      '<span class="pill ' + t.type + '">' + (t.type === "buy" ? "BUY" : "SELL") + "</span>" +
+      '<span class="t"><b>' + esc(t.name) + '</b><span class="small muted">' + langBadge(t.lang) + " " + esc(t.setId) + " #" + esc(t.localId) + " · " + esc(t.cond) + " · " + timeLabel(t.ts) + (t.event ? " · " + esc(t.event) : "") + "</span></span>" +
+      '<span class="r">' + t.qty + " × " + money(t.unit) +
+      (t.type === "sell" ? '<br><span class="small ' + (t.profit >= 0 ? "pos" : "neg") + '">' + (t.profit >= 0 ? "+" : "") + money(t.profit) + "</span>" : "") +
+      '<br><button type="button" class="btn small" data-undo="' + esc(t.id) + '" style="margin-top:4px;padding:3px 8px">Undo</button></span></div>';
+  });
+  $("logList").innerHTML = html + "</div>" + (list.length > 300 ? '<div class="small muted" style="margin-top:8px">Showing the latest 300.</div>' : "");
+  $("logList").querySelectorAll("[data-undo]").forEach(function (b) { b.addEventListener("click", function () { undoTx(b.dataset.undo); }); });
+}
+
+/* ---------- reports ---------- */
+function summarize(txs) {
+  var r = { sold: 0, revenue: 0, cost: 0, profit: 0, bought: 0, spent: 0 };
+  txs.forEach(function (t) {
+    if (t.type === "sell") { r.sold += t.qty; r.revenue += t.unit * t.qty; r.cost += t.costBasis; r.profit += t.profit; }
+    else { r.bought += t.qty; r.spent += t.unit * t.qty; }
+  });
+  return r;
+}
+function statsHTML(r) {
+  return '<div class="stats">' +
+    '<div class="stat"><div class="v ' + (r.profit >= 0 ? "pos" : "neg") + '">' + money(r.profit) + '</div><div class="k">Profit on sales</div></div>' +
+    '<div class="stat"><div class="v">' + money(r.revenue) + '</div><div class="k">Sales (' + r.sold + " cards)</div></div>" +
+    '<div class="stat"><div class="v">' + money(r.spent) + '</div><div class="k">Spent buying (' + r.bought + " cards)</div></div>" +
+    '<div class="stat"><div class="v">' + (r.revenue ? Math.round(r.profit / r.revenue * 100) + "%" : "–") + '</div><div class="k">Margin on sales</div></div></div>';
+}
+var reportEvent = null;
+function renderReports() {
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var todayTx = S.tx.filter(function (t) { return t.ts >= today.getTime(); });
+  var events = [];
+  S.tx.forEach(function (t) { var e = t.event || "(no show set)"; if (events.indexOf(e) < 0) events.push(e); });
+  events.reverse();
+  if (reportEvent == null || events.indexOf(reportEvent) < 0) reportEvent = events[0] || null;
+
+  var items = Object.keys(S.items).map(function (k) { return S.items[k]; }).filter(function (it) { return it.qty > 0; });
+  var stockCost = 0, stockMkt = 0;
+  items.forEach(function (it) { stockCost += it.cost; if (it.market != null) stockMkt += it.market * it.qty; });
+  var oldest = items.filter(function (it) { return it.firstIn; }).sort(function (a, b) { return a.firstIn - b.firstIn; }).slice(0, 10);
+
+  var html = '<h2>Reports</h2>';
+  html += '<div class="panel"><h3>Today</h3>' + statsHTML(summarize(todayTx)) + "</div>";
+  html += '<div class="panel"><h3>By show</h3>';
+  if (events.length) {
+    html += '<select id="repEvent" aria-label="Pick a show">' + events.map(function (e) { return "<option" + (e === reportEvent ? " selected" : "") + ">" + esc(e) + "</option>"; }).join("") + "</select>";
+    html += statsHTML(summarize(S.tx.filter(function (t) { return (t.event || "(no show set)") === reportEvent; })));
+  } else html += '<div class="notice">Set the current show in Settings, and buys and sales get grouped by show here.</div>';
+  html += "</div>";
+  html += '<div class="panel"><h3>All time</h3>' + statsHTML(summarize(S.tx)) + "</div>";
+  html += '<div class="panel"><h3>Stock on hand</h3><div class="stats">' +
+    '<div class="stat"><div class="v">' + money(stockCost) + '</div><div class="k">Paid for current stock</div></div>' +
+    '<div class="stat"><div class="v">' + money(stockMkt) + '</div><div class="k">Market value (last looked up)</div></div></div></div>';
+  html += '<div class="panel"><h3>Sitting longest</h3>';
+  if (oldest.length) {
+    html += '<div class="tablewrap"><table><thead><tr><th>Card</th><th class="n">Days</th><th class="n">Qty</th><th class="n">Cost</th></tr></thead><tbody>';
+    oldest.forEach(function (it) { html += "<tr><td>" + esc(it.name) + ' <span class="small muted">' + esc(it.setId) + " #" + esc(it.localId) + " " + esc(it.cond) + '</span></td><td class="n">' + days(it.firstIn) + '</td><td class="n">' + it.qty + '</td><td class="n">' + money(it.cost / it.qty) + "</td></tr>"; });
+    html += "</tbody></table></div>";
+  } else html += '<div class="notice">Nothing in stock yet.</div>';
+  html += "</div>";
+  $("reportsBody").innerHTML = html;
+  if ($("repEvent")) $("repEvent").addEventListener("change", function () { reportEvent = this.value; renderReports(); });
+}
+
+/* ---------- settings ---------- */
+function renderSettings() {
+  $("setEvent").value = S.settings.event;
+  $("setPct").value = S.settings.buyPct;
+  $("setRate").value = S.settings.eurUsd;
+  $("rateNote").textContent = S.settings.eurUsdDate ? "Rate from " + S.settings.eurUsdDate + "." : "";
+  $("resetConfirm").hidden = true;
+  $("setModel").value = getModel();
+  $("setApiKey").placeholder = getKey() ? "Saved. Type a new key to replace it" : "sk-ant-...";
+  renderKeyNote();
+}
+$("setEvent").addEventListener("change", function () { S.settings.event = this.value.trim(); save(); renderEventChip(); toast(S.settings.event ? "Show set to " + S.settings.event : "Show cleared"); });
+$("setPct").addEventListener("change", function () { var n = num(this.value); if (n && n > 0 && n <= 100) { S.settings.buyPct = Math.round(n); save(); } else this.value = S.settings.buyPct; });
+$("setRate").addEventListener("change", function () { var n = num(this.value); if (n && n > 0.5 && n < 2) { S.settings.eurUsd = n; S.settings.eurUsdDate = "typed by hand"; save(); renderSettings(); } else this.value = S.settings.eurUsd; });
+function fetchRate(quiet) {
+  return fetch("https://api.frankfurter.dev/v1/latest?base=EUR&symbols=USD").then(function (r) { return r.json(); }).then(function (j) {
+    if (j && j.rates && j.rates.USD) { S.settings.eurUsd = j.rates.USD; S.settings.eurUsdDate = j.date; save(); if (!quiet) { renderSettings(); toast("Rate updated: €1 = $" + j.rates.USD); } }
+  }).catch(function () { if (!quiet) toast("Couldn't get today's rate. You can type it in."); });
+}
+$("rateBtn").addEventListener("click", function () { fetchRate(false); });
+$("exportBtn").addEventListener("click", function () {
+  var data = JSON.stringify(Object.assign({ app: "keegan-card-stand", exportedAt: new Date().toISOString() }, S), null, 1);
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+  a.download = "card-stand-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  toast("Backup downloaded.");
+});
+$("importFile").addEventListener("change", function () {
+  var f = this.files && this.files[0]; if (!f) return;
+  var rd = new FileReader();
+  rd.onload = function () {
+    try {
+      var d = JSON.parse(rd.result);
+      if (!d || !d.items || !d.tx) throw new Error("bad file");
+      var b = blank();
+      S = { settings: Object.assign(b.settings, d.settings || {}), items: d.items, tx: d.tx, myPrices: d.myPrices || {} };
+      save(); renderEventChip(); renderSettings();
+      toast("Backup restored: " + Object.keys(S.items).length + " cards, " + S.tx.length + " entries.");
+    } catch (e) { toast("That file isn't a card stand backup."); }
+  };
+  rd.readAsText(f); this.value = "";
+});
+$("resetBtn").addEventListener("click", function () { $("resetConfirm").hidden = false; });
+$("resetNo").addEventListener("click", function () { $("resetConfirm").hidden = true; });
+$("resetYes").addEventListener("click", function () { var keep = S.settings; S = blank(); S.settings = keep; save(); $("resetConfirm").hidden = true; current = null; $("result").innerHTML = ""; toast("All cards and entries erased."); });
+
+/* ---------- photo scanning (Claude API) ---------- */
+// The key lives only in this browser's storage, never in backups.
+var KEY_STORE = "keeganCardStand.apiKey", MODEL_STORE = "keeganCardStand.model";
+function getKey() { try { return localStorage.getItem(KEY_STORE) || ""; } catch (e) { return ""; } }
+function getModel() { try { return localStorage.getItem(MODEL_STORE) || "claude-opus-5-5"; } catch (e) { return "claude-opus-5-5"; } }
+
+var SCAN_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["is_pokemon_card", "language", "set_code", "number", "name", "set_name", "notes"],
+  properties: {
+    is_pokemon_card: { type: "boolean" },
+    language: { type: "string", enum: ["ja", "zh-tw", "zh-cn", "en", "unknown"] },
+    set_code: { type: "string" },
+    number: { type: "string" },
+    name: { type: "string" },
+    set_name: { type: "string" },
+    notes: { type: "string" }
+  }
+};
+var SCAN_PROMPT = [
+  "This is a photo of a Pokémon trading card taken at a card stand. Read what is printed on it.",
+  "- language: the card's print language. ja = Japanese. zh-tw = Traditional Chinese (Taiwan/Hong Kong print, e.g. 寶可夢, 進化). zh-cn = Simplified Chinese (mainland print, e.g. 宝可梦, 进化). en = English. unknown if you can't tell.",
+  "- set_code: the set code printed at the bottom left, next to the regulation mark (e.g. SV2a, SV4a, sv8, SC2a, CSM1aC, s12a). Copy letters and case exactly. For English cards that only show a set symbol, give the set's usual abbreviation if you know it, otherwise an empty string.",
+  "- number: the card's collector number before the slash, exactly as printed (e.g. 201 from 201/165).",
+  "- name: the Pokémon or card name as printed.",
+  "- set_name: the set's name if you recognise it (in English), else an empty string.",
+  "- notes: anything that makes the reading uncertain (glare, blur, cut off), else an empty string.",
+  "If the photo is not a Pokémon card, set is_pokemon_card to false and leave the other text fields empty."
+].join("\n");
+
+function shrinkPhoto(file) {
+  return new Promise(function (resolve, reject) {
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function () {
+      var max = 1568, w = img.naturalWidth, h = img.naturalHeight, k = Math.min(1, max / Math.max(w, h));
+      var c = document.createElement("canvas"); c.width = Math.round(w * k); c.height = Math.round(h * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL("image/jpeg", 0.88));
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); reject(new Error("That file isn't a photo this browser can open.")); };
+    img.src = url;
+  });
+}
+
+function readCardPhoto(dataUrl) {
+  var body = {
+    model: getModel(),
+    max_tokens: 4000,
+    output_config: { effort: "low", format: { type: "json_schema", schema: SCAN_SCHEMA } },
+    messages: [{ role: "user", content: [
+      { type: "image", source: { type: "base64", media_type: "image/jpeg", data: dataUrl.split(",")[1] } },
+      { type: "text", text: SCAN_PROMPT }
+    ] }]
+  };
+  return fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": getKey(),
+      "anthropic-version": "2026-10-21",
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body: JSON.stringify(body)
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (!r.ok) {
+        var msg = (j.error && j.error.message) || ("HTTP " + r.status);
+        if (r.status === 401) msg = "The API key was turned down. Check it in Settings.";
+        else if (r.status === 429) msg = "Too many scans at once, or the account is out of credit. Wait a moment and try again.";
+        else if (r.status >= 500) msg = "Claude is busy right now. Try again in a moment.";
+        throw new Error(msg);
+      }
+      if (j.stop_reason === "refusal") throw new Error("Claude declined to read this photo. Type the set and number instead.");
+      var text = (j.content || []).filter(function (b) { return b.type === "text"; }).map(function (b) { return b.text; }).join("");
+      try { return JSON.parse(text); } catch (e) { throw new Error("Couldn't understand Claude's answer. Try another photo."); }
+    });
+  });
+}
+
+function scanStatus(html) { var el = $("scanStatus"); el.innerHTML = html; el.hidden = !html; }
+
+$("scanBtn").addEventListener("click", function () {
+  if (!getKey()) {
+    scanStatus('<div class="notice warn">Photo scanning needs a Claude API key. <button class="btn small" type="button" id="goKey">Add it in Settings</button></div>');
+    $("goKey").addEventListener("click", function () { show("settings"); setTimeout(function () { $("setApiKey").focus(); }, 50); });
+    return;
+  }
+  $("scanFile").click();
+});
+$("scanFile").addEventListener("change", function () {
+  var f = this.files && this.files[0]; this.value = "";
+  if (!f) return;
+  var thumb = "";
+  scanStatus('<div class="notice"><span class="spinner"></span> Reading the card…</div>');
+  shrinkPhoto(f).then(function (dataUrl) {
+    thumb = dataUrl;
+    scanStatus('<div class="scanprev"><img alt="Your photo" src="' + dataUrl + '"><div><span class="spinner"></span> <span class="muted">Reading the card…</span></div></div>');
+    return readCardPhoto(dataUrl);
+  }).then(function (r) {
+    if (!r.is_pokemon_card) { scanStatus('<div class="scanprev"><img alt="" src="' + thumb + '"><div class="notice warn">That doesn’t look like a Pokémon card. Try again with the card filling the photo.</div></div>'); return; }
+    var lang = LANGS[r.language] ? r.language : S.settings.lang;
+    setLang(lang);
+    $("setInput").value = r.set_code || r.set_name || "";
+    $("numInput").value = r.number || "";
+    var line = esc(r.name || "Card") + " · " + esc(LANGS[lang].label) + " · set " + esc(r.set_code || "?") + " · #" + esc(r.number || "?");
+    scanStatus('<div class="scanprev"><img alt="" src="' + thumb + '"><div class="small"><b>Read from photo:</b> ' + line +
+      '<br><span class="muted">Check the set code and number match the card.' + (r.notes ? " " + esc(r.notes) : "") + "</span></div></div>");
+    if (r.set_code || r.set_name) runFind($("setInput").value, $("numInput").value);
+  }).catch(function (err) {
+    scanStatus('<div class="notice warn">' + esc(err.message) + "</div>");
+  });
+});
+
+function renderKeyNote() {
+  var k = getKey();
+  $("keyNote").textContent = k ? "Key saved on this device (ending " + k.slice(-4) + "). It isn't included in backups." : "No key saved. Scanning is off until you add one.";
+}
+$("setApiKey").addEventListener("change", function () {
+  var v = this.value.trim();
+  try { if (v) localStorage.setItem(KEY_STORE, v); else localStorage.removeItem(KEY_STORE); } catch (e) {}
+  this.value = ""; renderKeyNote(); toast(v ? "API key saved on this device." : "API key removed.");
+});
+$("setModel").addEventListener("change", function () { try { localStorage.setItem(MODEL_STORE, this.value); } catch (e) {} });
+
+/* ---------- sample data ---------- */
+// Real catalog cards (TCGdex ids). eur = Cardmarket 30-day average, usd = TCGplayer market, mine = Keegan-set price (Chinese).
+var SAMPLE_CARDS = [
+  { lang: "ja", id: "SV2a-201", n: "201", name: "リザードンex", set: "SV2a", setName: "ポケモンカード151", of: 165, v: "jr7oetx1mqug9", vl: "Holo", img: "https://assets.tcgdex.net/ja/SV/SV2a/201", eur: 353.78 },
+  { lang: "ja", id: "SV2a-205", n: "205", name: "ミュウex", set: "SV2a", setName: "ポケモンカード151", of: 165, v: "jr7oetx1mqug9", vl: "Holo", img: "https://assets.tcgdex.net/ja/SV/SV2a/205", eur: 215.31 },
+  { lang: "ja", id: "SV2a-173", n: "173", name: "ピカチュウ", set: "SV2a", setName: "ポケモンカード151", of: 165, v: "jr7oetx1mqug9", vl: "Holo", img: "https://assets.tcgdex.net/ja/SV/SV2a/173", eur: 28.41 },
+  { lang: "ja", id: "SV2a-006", n: "006", name: "リザードンex", set: "SV2a", setName: "ポケモンカード151", of: 165, v: "jr7oetx1mqug9", vl: "Holo", img: "https://assets.tcgdex.net/ja/SV/SV2a/006", eur: 2.21 },
+  { lang: "ja", id: "SV2a-151", n: "151", name: "ミュウex", set: "SV2a", setName: "ポケモンカード151", of: 165, v: "jr7oetx1mqug9", vl: "Holo", img: "https://assets.tcgdex.net/ja/SV/SV2a/151", eur: 1.5 },
+  { lang: "ja", id: "SV2a-150", n: "150", name: "ミュウツー", set: "SV2a", setName: "ポケモンカード151", of: 165, v: "jr7oetx1mqug9", vl: "Holo", img: "https://assets.tcgdex.net/ja/SV/SV2a/150", eur: 1.43 },
+  { lang: "ja", id: "SV2a-025", n: "025", name: "ピカチュウ", set: "SV2a", setName: "ポケモンカード151", of: 165, v: "endfynwn4n10gzq", vl: "Normal", img: "https://assets.tcgdex.net/ja/SV/SV2a/025", eur: 2 },
+  { lang: "ja", id: "SV4a-349", n: "349", name: "リザードンex", set: "SV4a", setName: "シャイニートレジャーex", of: 190, v: "jr7oetx1mqug9", vl: "Holo", img: "https://assets.tcgdex.net/ja/SV/SV4a/349", eur: 248.63 },
+  { lang: "ja", id: "SV4a-236", n: "236", name: "ピカチュウ", set: "SV4a", setName: "シャイニートレジャーex", of: 190, v: "jr7oetx1mqug9", vl: "Holo", img: "https://assets.tcgdex.net/ja/SV/SV4a/236", eur: 44.36 },
+  { lang: "ja", id: "SV4a-200", n: "200", name: "ユキノオー", set: "SV4a", setName: "シャイニートレジャーex", of: 190, v: "jr7oetx1mqug9", vl: "Holo", img: "https://assets.tcgdex.net/ja/SV/SV4a/200", eur: 1.05 },
+  { lang: "ja", id: "SV8-033", n: "033", name: "ピカチュウex", set: "SV8", setName: "超電ブレイカー", of: 106, v: "jr7oetx1mqug9", vl: "Holo", img: "https://assets.tcgdex.net/ja/SV/SV8/033", eur: 1.15 },
+  { lang: "zh-tw", id: "SC2a-001", n: "001", name: "妙蛙花V", set: "SC2a", setName: "無極力量 SET A", of: 145, v: "normal0", vl: "Normal", img: "", mine: 6 },
+  { lang: "zh-tw", id: "SC2a-050", n: "050", name: "凍原熊", set: "SC2a", setName: "無極力量 SET A", of: 145, v: "normal0", vl: "Normal", img: "", mine: 1.5 },
+  { lang: "zh-tw", id: "SC2a-010", n: "010", name: "派拉斯", set: "SC2a", setName: "無極力量 SET A", of: 145, v: "normal0", vl: "Normal", img: "", mine: 0.5 },
+  { lang: "zh-cn", id: "manual:cs1a-012:皮卡丘", n: "012", name: "皮卡丘", set: "CS1a", setName: "", of: "", v: "holo", vl: "Holo", img: "", mine: 4, manual: true },
+  { lang: "en", id: "swsh7-215", n: "215", name: "Umbreon VMAX", set: "swsh7", setName: "Evolving Skies", of: 203, v: "jr7oetx1mqug9", vl: "Holo", img: "https://assets.tcgdex.net/en/swsh/swsh7/215", usd: 2149.1 },
+  { lang: "en", id: "sv03.5-199", n: "199", name: "Charizard ex", set: "sv03.5", setName: "151", of: 165, v: "jr7oetx1mqug9", vl: "Holo", img: "https://assets.tcgdex.net/en/sv/sv03.5/199", usd: 279.99 },
+  { lang: "en", id: "sv03.5-006", n: "006", name: "Charizard ex", set: "sv03.5", setName: "151", of: 165, v: "jr7oetx1mqug9", vl: "Holo", img: "https://assets.tcgdex.net/en/sv/sv03.5/006", usd: 7.55 },
+  { lang: "en", id: "sv03.5-025", n: "025", name: "Pikachu", set: "sv03.5", setName: "151", of: 165, v: "endfynwn4n10gzq", vl: "Normal", img: "https://assets.tcgdex.net/en/sv/sv03.5/025", usd: 0.74 }
+];
+var SAMPLE_SHOWS = [
+  { name: "Sample: Dallas Card Show", daysAgo: 52 },
+  { name: "Sample: Austin Pokémon Meetup", daysAgo: 31 },
+  { name: "Sample: Houston Collect-A-Con", daysAgo: 10 }
+];
+function addSampleData() {
+  removeSampleData(true);
+  var seed = 7;
+  function rnd() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+  function pick(a) { return a[Math.floor(rnd() * a.length)]; }
+  var conds = ["NM", "NM", "NM", "LP", "MP"];
+  var txs = [];
+  var dayStart = new Date(); dayStart.setHours(10, 0, 0, 0);
+  SAMPLE_CARDS.forEach(function (c) {
+    var market = c.usd != null ? c.usd : c.eur != null ? Math.round(c.eur * S.settings.eurUsd * 100) / 100 : c.mine;
+    if (c.mine != null) S.myPrices[priceKey(c.lang, c.id, c.v)] = c.mine;
+    var cond = pick(conds);
+    var key = itemKey(c.lang, c.id, c.v, cond);
+    var it = S.items[key] = { key: key, lang: c.lang, cardId: c.id, name: c.name, setId: c.set, setName: c.setName, localId: c.n, official: c.of, image: c.img, manual: !!c.manual,
+      variantId: c.v, variantLabel: c.vl, cond: cond, qty: 0, cost: 0, firstIn: null, lastIn: null, market: market, marketAt: Date.now(), sample: true };
+    var buyShow = Math.floor(rnd() * 2);
+    var cheap = market < 5;
+    var qtyIn = cheap ? 2 + Math.floor(rnd() * 4) : 1 + Math.floor(rnd() * 2);
+    var buyTs = dayStart.getTime() - SAMPLE_SHOWS[buyShow].daysAgo * DAY + Math.floor(rnd() * 6 * 3600000);
+    var unitIn = niceOffer(market * (0.6 + rnd() * 0.15));
+    txs.push({ ts: buyTs, type: "buy", it: it, qty: qtyIn, unit: unitIn, market: market, event: SAMPLE_SHOWS[buyShow].name });
+    // sell some of them at a later show
+    var sellShow = buyShow + 1 + Math.floor(rnd() * (SAMPLE_SHOWS.length - buyShow - 1));
+    var toSell = Math.floor(rnd() * (qtyIn + 1));
+    if (rnd() < 0.25) toSell = 0;
+    for (var k = 0; k < toSell; k++) {
+      var sellTs = dayStart.getTime() - SAMPLE_SHOWS[sellShow].daysAgo * DAY + Math.floor(rnd() * 6 * 3600000) + k * 60000;
+      txs.push({ ts: sellTs, type: "sell", it: it, qty: 1, unit: Math.round(market * (0.9 + rnd() * 0.15) * 100) / 100, market: market, event: SAMPLE_SHOWS[sellShow].name });
+    }
+  });
+  txs.sort(function (a, b) { return a.ts - b.ts; });
+  txs.forEach(function (x) {
+    var it = x.it, before = snapshotOf(it);
+    var tx = { id: uid(), ts: x.ts, type: x.type, key: it.key, name: it.name, lang: it.lang, setId: it.setId, localId: it.localId, variantLabel: it.variantLabel, cond: it.cond,
+      qty: x.qty, unit: x.unit, market: x.market, event: x.event, before: before, sample: true };
+    if (x.type === "buy") {
+      if (it.qty <= 0) it.firstIn = x.ts;
+      it.qty += x.qty; it.cost += x.unit * x.qty; it.lastIn = x.ts;
+    } else {
+      var avg = it.cost / it.qty;
+      tx.costBasis = avg * x.qty; tx.profit = x.unit * x.qty - tx.costBasis; tx.daysHeld = Math.floor((x.ts - it.firstIn) / DAY);
+      it.qty -= x.qty; it.cost = it.qty > 0 ? it.cost - avg * x.qty : 0;
+      if (it.qty <= 0) { it.qty = 0; it.firstIn = null; }
+    }
+    S.tx.push(tx);
+  });
+  S.tx.sort(function (a, b) { return a.ts - b.ts; });
+  save();
+  var inStock = Object.keys(S.items).filter(function (k) { return S.items[k].sample && S.items[k].qty > 0; }).length;
+  toast("Added " + SAMPLE_CARDS.length + " sample cards and " + txs.length + " buys and sales. " + inStock + " are still in stock.");
+}
+function removeSampleData(quiet) {
+  var n = 0;
+  Object.keys(S.items).forEach(function (k) { if (S.items[k].sample) { delete S.items[k]; n++; } });
+  S.tx = S.tx.filter(function (t) { return !t.sample; });
+  SAMPLE_CARDS.forEach(function (c) { if (c.mine != null) delete S.myPrices[priceKey(c.lang, c.id, c.v)]; });
+  save();
+  if (!quiet) toast(n ? "Removed the sample cards." : "There were no sample cards to remove.");
+}
+$("sampleAdd").addEventListener("click", function () { addSampleData(); });
+$("sampleRemove").addEventListener("click", function () { removeSampleData(false); });
+
+/* ---------- start ---------- */
+setLang(S.settings.lang || "ja");
+renderEventChip();
+if (!S.settings.eurUsdDate || S.settings.eurUsdDate !== new Date().toISOString().slice(0, 10)) fetchRate(true);
+if (!S.tx.length) {
+  $("result").innerHTML = '<div class="panel"><h3>Try it</h3><div class="small muted">Type the set code and number from the bottom of a card. To see how it works, try a Japanese Charizard ex from Pokémon Card 151.</div><div class="row"><button class="btn" type="button" id="tryEx">Look up SV2a 201</button><button class="btn" type="button" id="trySample">Add sample cards</button></div></div>';
+  $("tryEx").addEventListener("click", function () { setLang("ja"); $("setInput").value = "SV2a"; $("numInput").value = "201"; runFind("SV2a", "201"); });
+  $("trySample").addEventListener("click", function () { addSampleData(); $("result").innerHTML = ""; show("stock"); });
+}
+})();
+</script>
+</body>
+</html>
