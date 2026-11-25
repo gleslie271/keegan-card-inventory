@@ -103,6 +103,17 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 .market { display: grid; gap: 2px; }
 .market .price { font: 700 34px/1 var(--font-display); font-variant-numeric: tabular-nums; }
 .market .src { font-size: 12px; color: var(--muted); }
+.calc { border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; gap: 8px; background: var(--surface); }
+.calc .disp { background: var(--surface-2); border-radius: 8px; padding: 6px 10px; text-align: right; min-height: 54px; display: grid; align-content: center; }
+.calc .expr { font-size: 13px; color: var(--muted); min-height: 16px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.calc .val { font: 700 24px/1.15 var(--font-display); font-variant-numeric: tabular-nums; }
+.calc .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.calc .chips button { flex: 1 1 auto; border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 999px; padding: 6px 8px; font: 600 13px/1.1 var(--font-body); cursor: pointer; }
+.calc .chips button.b { background: var(--buy-soft); }
+.calc .keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.calc .keys button { border: 0; border-radius: 8px; background: var(--surface-2); color: var(--fg); padding: 10px 0; font: 600 18px/1 var(--font-display); cursor: pointer; }
+.calc .keys button.op { background: var(--ink); color: var(--ink-fg); }
+.calc .keys button:active, .calc .chips button:active { transform: scale(.97); }
 .quote { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .quote .q { border-radius: 10px; padding: 10px; display: grid; gap: 6px; }
 .quote .q.b { background: var(--buy-soft); }
@@ -722,10 +733,7 @@ function renderPrice() {
     '<div class="market"><h3>Market price</h3><div class="price">' + (mk.usd != null ? money(mk.usd) : "—") + '</div><div class="src">' + esc(src) + "</div></div>" +
     '<div class="row"><label class="f">Your price (overrides the market for this card)<div class="money"><input type="text" inputmode="decimal" id="cMine" placeholder="' + (v.price ? "Blank = market" : "Set a price") + '" value="' + (mk.mine ? esc(mk.usd.toFixed(2)) : "") + '"></div></label>' +
     (mk.mine ? '<button class="btn small" type="button" id="cClearMine" style="flex:0 1 auto">Use market</button>' : "") + "</div>" +
-    '<div class="quote">' +
-    '<div class="q b"><span class="lbl">Buy offer (' + S.settings.buyPct + '%)</span><div class="money"><input type="text" inputmode="decimal" id="cBuy"></div></div>' +
-    '<div class="q s"><span class="lbl">Sell price</span><div class="money"><input type="text" inputmode="decimal" id="cSell"></div></div>' +
-    "</div>" +
+    calcHtml(mk.usd) +
     '<label class="f">Quantity<div class="stepper"><button type="button" id="qMinus" aria-label="One fewer">−</button><input type="number" id="cQty" min="1" step="1" value="' + current.qty + '"><button type="button" id="qPlus" aria-label="One more">+</button></div></label>' +
     '<div class="stockline num">' + (inStock > 0
       ? "In stock: <b>" + inStock + "</b> · average cost " + money(avg) + " · first in " + days(item.firstIn) + " days ago"
@@ -736,10 +744,7 @@ function renderPrice() {
     '<div class="links" id="cLinks"></div>';
   $("pricePanel").innerHTML = html;
 
-  if (!current.dirty.buy) $("cBuy").value = mk.usd != null ? niceOffer(mk.usd * pct).toFixed(2) : "";
-  if (!current.dirty.sell) $("cSell").value = mk.usd != null ? mk.usd.toFixed(2) : "";
-  if (current.dirty.buy && current.buyVal != null) $("cBuy").value = current.buyVal;
-  if (current.dirty.sell && current.sellVal != null) $("cSell").value = current.sellVal;
+  if (!current.dirty.buy || !current.calc) current.calc = { toks: mk.usd != null ? [mk.usd.toFixed(2)] : [], fresh: true };
 
   $("cMine").addEventListener("change", function () {
     var n = num(this.value), k = priceKey(m.lang, m.cardId, v.id);
@@ -747,8 +752,14 @@ function renderPrice() {
     save(); current.dirty = { buy: false, sell: false }; renderPrice();
   });
   if ($("cClearMine")) $("cClearMine").addEventListener("click", function () { delete S.myPrices[priceKey(m.lang, m.cardId, v.id)]; save(); current.dirty = { buy: false, sell: false }; renderPrice(); });
-  $("cBuy").addEventListener("input", function () { current.dirty.buy = true; current.buyVal = this.value; updateTotals(); });
-  $("cSell").addEventListener("input", function () { current.dirty.sell = true; current.sellVal = this.value; updateTotals(); });
+  $("calc").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.k) calcKey(b.dataset.k);
+    else if (b.dataset.pct) { var p = +b.dataset.pct; current.calc = { toks: p === 100 ? [mk.usd.toFixed(2)] : [mk.usd.toFixed(2), "×", p + "%"], fresh: true }; }
+    current.dirty.buy = true;
+    renderCalc(); updateTotals();
+  });
+  renderCalc();
   $("cQty").addEventListener("input", function () { current.qty = Math.max(1, parseInt(this.value, 10) || 1); updateTotals(); });
   $("qMinus").addEventListener("click", function () { current.qty = Math.max(1, current.qty - 1); $("cQty").value = current.qty; updateTotals(); });
   $("qPlus").addEventListener("click", function () { current.qty += 1; $("cQty").value = current.qty; updateTotals(); });
@@ -758,11 +769,70 @@ function renderPrice() {
   renderLinks();
 }
 
+/* ---------- price calculator ---------- */
+// current.calc.toks is a list like ["245.00", "×", "70%"]. Buy and Sell record its result per card.
+function calcHtml(market) {
+  var chips = "";
+  if (market != null) {
+    var pcts = [S.settings.buyPct, 80, 90].filter(function (p, i, a) { return p > 0 && p < 100 && a.indexOf(p) === i; }).sort(function (a, b) { return a - b; });
+    chips = '<div class="chips">' + pcts.map(function (p) { return '<button type="button" data-pct="' + p + '"' + (p === S.settings.buyPct ? ' class="b"' : "") + ">" + p + "% · " + money(Math.round(market * p) / 100) + "</button>"; }).join("") +
+      '<button type="button" data-pct="100">Market · ' + money(market) + "</button></div>";
+  }
+  var keys = ["C", "⌫", "%", "÷", "7", "8", "9", "×", "4", "5", "6", "−", "1", "2", "3", "+", "0", "00", ".", "="];
+  return '<div class="calc" id="calc"><div class="disp"><div class="expr" id="calcExpr"></div><div class="val" id="calcVal"></div></div>' + chips +
+    '<div class="keys">' + keys.map(function (k) { return '<button type="button" data-k="' + k + '"' + (/[÷×−+=]/.test(k) ? ' class="op"' : "") + ' aria-label="' + ({ "⌫": "Delete", "C": "Clear" }[k] || k) + '">' + k + "</button>"; }).join("") + "</div></div>";
+}
+function calcIsOp(t) { return t === "+" || t === "−" || t === "×" || t === "÷"; }
+function calcEval(toks) {
+  var vals = [], ops = [];
+  toks.forEach(function (t) {
+    if (calcIsOp(t)) ops.push(t);
+    else { var pc = /%$/.test(t), n = parseFloat(t); if (isNaN(n)) n = 0; vals.push(pc ? n / 100 : n); }
+  });
+  if (!vals.length) return null;
+  ops = ops.slice(0, vals.length - 1);
+  var v2 = [vals[0]], o2 = [];
+  for (var i = 0; i < ops.length; i++) {
+    if (ops[i] === "×") v2[v2.length - 1] *= vals[i + 1];
+    else if (ops[i] === "÷") v2[v2.length - 1] = vals[i + 1] ? v2[v2.length - 1] / vals[i + 1] : NaN;
+    else { o2.push(ops[i]); v2.push(vals[i + 1]); }
+  }
+  var r = v2[0];
+  for (var j = 0; j < o2.length; j++) r = o2[j] === "+" ? r + v2[j + 1] : r - v2[j + 1];
+  return isFinite(r) ? Math.round(r * 100) / 100 : null;
+}
+function calcValue() { return current && current.calc ? calcEval(current.calc.toks) : null; }
+function calcKey(k) {
+  var c = current.calc, t = c.toks, last = t[t.length - 1];
+  if (k === "C") { c.toks = []; c.fresh = false; return; }
+  if (k === "⌫") { if (c.fresh) { c.toks = []; c.fresh = false; return; } if (last != null) { last = last.slice(0, -1); if (last) t[t.length - 1] = last; else t.pop(); } return; }
+  if (k === "=") { var r = calcEval(t); c.toks = r != null ? [r.toFixed(2)] : []; c.fresh = true; return; }
+  if (calcIsOp(k)) {
+    if (last == null) return;
+    if (calcIsOp(last)) t[t.length - 1] = k; else t.push(k);
+    c.fresh = false; return;
+  }
+  if (k === "%") { if (last != null && !calcIsOp(last) && !/%$/.test(last)) t[t.length - 1] = last + "%"; c.fresh = false; return; }
+  // digits, 00 and the decimal point
+  if (c.fresh) { t.length = 0; last = null; c.fresh = false; }
+  if (last == null || calcIsOp(last)) { t.push(k === "." ? "0." : k === "00" ? "0" : k); return; }
+  if (/%$/.test(last)) return;
+  if (k === "." && last.indexOf(".") >= 0) return;
+  if (last === "0" && k !== ".") { t[t.length - 1] = k === "00" ? "0" : k; return; }
+  if (last.length >= 9) return;
+  t[t.length - 1] = last + k;
+}
+function renderCalc() {
+  var t = current.calc.toks, v = calcEval(t);
+  $("calcExpr").textContent = t.length > 1 ? t.join(" ") + " =" : "";
+  $("calcVal").textContent = v != null ? money(v) : "$0.00";
+}
+
 function updateTotals() {
   var m = current.model, v = m.variants[current.variantIdx];
-  var q = current.qty, b = num($("cBuy").value), s = num($("cSell").value);
+  var q = current.qty, b = calcValue(), s = b;
   var item = stockFor(m, v.id, current.cond);
-  $("buyTotal").textContent = b != null ? q + " × " + money(b) + " = " + money(b * q) : "Enter an offer";
+  $("buyTotal").textContent = b != null ? q + " × " + money(b) + " = " + money(b * q) : "Enter a price";
   $("sellTotal").textContent = s != null ? q + " × " + money(s) + " = " + money(s * q) : "Enter a price";
   var pl = $("profitLine"); pl.textContent = ""; pl.className = "small num";
   if (item && item.qty > 0 && s != null) {
@@ -832,15 +902,15 @@ function undoTx(id) {
 }
 
 function doBuy() {
-  var unit = num($("cBuy").value);
-  if (unit == null || unit < 0) { $("cBuy").focus(); toast("Enter what you're paying per card."); return; }
+  var unit = calcValue();
+  if (unit == null || unit < 0) { toast("Use the calculator to enter what you're paying per card."); return; }
   var t = record("buy", unit);
   toast("Bought " + t.qty + " × " + t.name + " for " + money(unit * t.qty), function () { undoTx(t.id); });
   current.dirty = { buy: false, sell: false }; current.qty = 1; renderPrice();
 }
 function doSell() {
-  var unit = num($("cSell").value);
-  if (unit == null || unit < 0) { $("cSell").focus(); toast("Enter the sale price per card."); return; }
+  var unit = calcValue();
+  if (unit == null || unit < 0) { toast("Use the calculator to enter the sale price per card."); return; }
   var t = record("sell", unit);
   toast("Sold " + t.qty + " × " + t.name + " · profit " + money(t.profit), function () { undoTx(t.id); });
   current.dirty = { buy: false, sell: false }; current.qty = 1; renderPrice();
