@@ -142,6 +142,7 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 .stepper { display: grid; grid-template-columns: 44px 1fr 44px; gap: 6px; }
 .stepper button { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; font-size: 20px; cursor: pointer; }
 .stepper input { text-align: center; }
+.linkbtn { border: 0; background: none; padding: 0; color: var(--fg); font: inherit; text-decoration: underline; cursor: pointer; }
 .disclose { border: 0; background: none; color: var(--muted); font: 600 13px/1 var(--font-body); padding: 6px 0; cursor: pointer; justify-self: start; }
 .details { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
 .details[hidden] { display: none; }
@@ -295,6 +296,9 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
       <label class="f">Buy offer, as % of market
         <input type="number" id="setPct" min="1" max="100" step="1">
       </label>
+      <label class="f">Chinese card price, as % of the English card's market price
+        <input type="number" id="setZhPct" min="1" max="200" step="1">
+      </label>
     </div>
     <div class="panel" id="syncPanel"></div>
     <div class="panel">
@@ -426,7 +430,7 @@ var DAY = 86400000;
 
 /* ---------- storage ---------- */
 function blank() {
-  return { settings: { buyPct: 70, eurUsd: 1.09, eurUsdDate: "", event: "", show: null, lang: "ja" }, items: {}, tx: [], myPrices: {}, shows: [] };
+  return { settings: { buyPct: 70, zhPct: 30, eurUsd: 1.09, eurUsdDate: "", event: "", show: null, lang: "ja" }, items: {}, tx: [], myPrices: {}, shows: [], twins: {} };
 }
 function load() {
   try {
@@ -435,7 +439,7 @@ function load() {
       var s = JSON.parse(raw);
       var b = blank();
       s.settings = Object.assign(b.settings, s.settings || {});
-      s.items = s.items || {}; s.tx = s.tx || []; s.myPrices = s.myPrices || {}; s.shows = s.shows || [];
+      s.items = s.items || {}; s.tx = s.tx || []; s.myPrices = s.myPrices || {}; s.shows = s.shows || []; s.twins = s.twins || {};
       return s;
     }
   } catch (e) {}
@@ -624,7 +628,8 @@ function toModel(lang, card, set) {
     setId: setObj.id || set.id, setName: setObj.name || set.name,
     localId: card.localId, official: (setObj.cardCount && setObj.cardCount.official) || set.official || "",
     rarity: card.rarity || "", image: card.image || "", dexId: (card.dexId && card.dexId[0]) || null,
-    variants: variants, manual: false
+    variants: variants, manual: false,
+    twinSig: lang.indexOf("zh") === 0 ? { ill: card.illustrator || "", hp: card.hp || null, dmg: (card.attacks || []).map(function (a) { return a.damage || ""; }).join("/"), reg: card.regulationMark || "" } : null
   };
 }
 
@@ -635,6 +640,110 @@ function englishName(model) {
     if (!r || !r[0]) return null;
     return r[0].name.replace(/\s+(ex|EX|GX|V|VMAX|VSTAR|LV\.X|BREAK|Prime|LEGEND|δ).*$/, "").trim();
   });
+}
+
+/* ---------- Chinese cards: price from the same card's English version ---------- */
+// TCGdex gives Chinese cards the same illustrator, HP and attack damage as their English printing,
+// so the English twin is found by name and then checked on those details.
+var enCandCache = {};
+function enSummary(x) {
+  var tp = (x.pricing && x.pricing.tcgplayer) || {}, usd = null, pid = null;
+  ["holofoil", "normal", "reverse-holofoil", "1st-edition-holofoil", "unlimited-holofoil", "1st-edition", "unlimited"].concat(Object.keys(tp)).some(function (k) {
+    var p = tp[k]; if (p && typeof p === "object" && (p.marketPrice || p.midPrice)) { usd = p.marketPrice || p.midPrice; pid = p.productId || null; return true; }
+    return false;
+  });
+  return { id: x.id, name: x.name, set: (x.set && x.set.name) || "", localId: x.localId, official: (x.set && x.set.cardCount && x.set.cardCount.official) || "",
+    ill: x.illustrator || "", hp: x.hp || null, dmg: (x.attacks || []).map(function (a) { return a.damage || ""; }).join("/"), reg: x.regulationMark || "",
+    usd: usd, pid: pid, image: x.image || "" };
+}
+function enCandidates(query, exact) {
+  var ck = (exact ? "=" : "~") + query.toLowerCase();
+  if (enCandCache[ck]) return enCandCache[ck];
+  enCandCache[ck] = getJSONQuiet(API + "en/cards?name=" + (exact ? "eq:" : "") + encodeURIComponent(query) + "&pagination:itemsPerPage=60").then(function (list) {
+    return Promise.all((list || []).slice(0, 60).map(function (c) { return getJSONQuiet(API + "en/cards/" + encodeURIComponent(c.id)); }));
+  }).then(function (full) { return full.filter(Boolean).map(enSummary); });
+  return enCandCache[ck];
+}
+function speciesOf(local) { // English name of the Pokémon whose name appears in a Chinese or Japanese card name
+  if (!local) return null;
+  var map = nameMap();
+  for (var i = 0; i < NAME_KEYS.length; i++) if (local.indexOf(NAME_KEYS[i]) >= 0) return map[NAME_KEYS[i]];
+  return null;
+}
+function rankTwins(sig, list) {
+  var seen = {};
+  list = list.filter(function (c) { if (seen[c.id]) return false; seen[c.id] = 1; return true; }).map(function (c) {
+    var s = 0;
+    if (sig.ill && c.ill === sig.ill) s += 4;
+    if (sig.hp && c.hp === sig.hp) s += 2;
+    if (sig.dmg != null && sig.dmg !== "" && c.dmg === sig.dmg) s += 3;
+    if (sig.reg && c.reg === sig.reg) s += 1;
+    return Object.assign({ score: s }, c);
+  }).sort(function (a, b) { return b.score - a.score || (b.usd != null) - (a.usd != null) || String(b.id).localeCompare(String(a.id)); });
+  return { list: list, best: list[0] || null, confident: !!(list[0] && list[0].score >= 9) };
+}
+function findTwin(m) {
+  if (m.lang.indexOf("zh") !== 0) return Promise.resolve(null);
+  var chosen = S.twins[m.cardId];
+  if (chosen === "none") return Promise.resolve({ none: true, list: [] });
+  if (chosen) return getJSONQuiet(API + "en/cards/" + encodeURIComponent(chosen)).then(function (x) {
+    return x ? { best: enSummary(x), confident: true, chosen: true, list: [] } : null;
+  });
+  var sig = m.twinSig || {}, exact = m.localName ? m.name : null, species = speciesOf(m.localName || m.name);
+  return (exact ? enCandidates(exact, true) : Promise.resolve([])).then(function (list) {
+    var r = rankTwins(sig, list);
+    if (r.confident || !species) return r;
+    return enCandidates(species, false).then(function (more) { return rankTwins(sig, list.concat(more)); });
+  });
+}
+function twinPrice(t) { return t && t.best && t.confident && t.best.usd != null ? Math.round(t.best.usd * S.settings.zhPct) / 100 : null; }
+function loadTwin() {
+  var m = current.model;
+  if (m.lang.indexOf("zh") !== 0) { current.twin = null; return; }
+  current.twin = { loading: true, list: [] };
+  findTwin(m).then(function (t) {
+    if (!current || current.model !== m) return;
+    current.twin = t || { list: [] };
+    if (!current.dirty.buy) current.calc = null;
+    if ($("pricePanel")) renderPrice();
+  });
+}
+function twinLabel(c) { return c.name + " · " + (c.set ? c.set + " " : "") + "#" + c.localId + (c.official ? "/" + c.official : ""); }
+function openTwinPicker() {
+  var m = current.model, t = current.twin || { list: [] };
+  var box = $("twinPick"); if (!box) return;
+  function rows(list) {
+    if (!list.length) return '<div class="notice">No English cards found. Try another name.</div>';
+    return '<div class="list">' + list.slice(0, 12).map(function (c, i) {
+      return '<button type="button" class="item" data-tw="' + esc(c.id) + '"><span class="thumb">' + (c.image ? '<img alt="" loading="lazy" src="' + esc(imgUrl(c.image)) + '" onerror="this.remove()">' : "") + "</span>" +
+        '<span class="t"><b>' + esc(c.name) + '</b><span class="small muted">' + esc((c.set ? c.set + " · " : "") + "#" + c.localId + (c.ill ? " · " + c.ill : "")) + "</span></span>" +
+        '<span class="r small">' + (c.usd != null ? money(c.usd) : "no price") + "</span></button>";
+    }).join("") + "</div>";
+  }
+  box.hidden = false;
+  box.innerHTML = '<div class="small"><b>Which English card is this?</b> Its price × ' + S.settings.zhPct + "% becomes this card’s market price.</div>" +
+    '<div class="row"><input type="search" id="twinQ" placeholder="Search English cards, e.g. Iono’s Wattrel" value="' + esc(m.localName ? m.name : "") + '"><button class="btn small" type="button" id="twinGo" style="flex:0 1 auto">Search</button></div>' +
+    '<div id="twinRows">' + rows(t.list || []) + "</div>" +
+    '<div class="row"><button class="btn small" type="button" id="twinNone">None of these, I’ll set the price</button><button class="btn small" type="button" id="twinClose" style="flex:0 1 auto">Close</button></div>';
+  function bindRows(list) {
+    box.querySelectorAll("[data-tw]").forEach(function (b) { b.addEventListener("click", function () {
+      S.twins[m.cardId] = b.getAttribute("data-tw"); save();
+      var c = list.filter(function (x) { return x.id === b.getAttribute("data-tw"); })[0];
+      current.twin = { best: c, confident: true, chosen: true, list: [] };
+      if (!current.dirty.buy) current.calc = null;
+      renderPrice();
+    }); });
+  }
+  bindRows(t.list || []);
+  function search() {
+    var q = $("twinQ").value.trim(); if (!q) return;
+    $("twinRows").innerHTML = '<div class="small muted"><span class="spinner"></span> Searching…</div>';
+    enCandidates(q, false).then(function (list) { var r = rankTwins(m.twinSig || {}, list); $("twinRows").innerHTML = rows(r.list); bindRows(r.list); });
+  }
+  $("twinGo").addEventListener("click", search);
+  $("twinQ").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); search(); } });
+  $("twinNone").addEventListener("click", function () { S.twins[m.cardId] = "none"; save(); current.twin = { none: true, list: [] }; if (!current.dirty.buy) current.calc = null; renderPrice(); });
+  $("twinClose").addEventListener("click", function () { box.hidden = true; });
 }
 
 /* ---------- look up view ---------- */
@@ -728,6 +837,7 @@ function openCard(model, preselect) {
     Object.keys(S.items).forEach(function (k) { if (S.items[k].cardId === model.cardId) S.items[k].photo = current.photoId; });
     save(); toast("Photo saved with this card.");
   }
+  loadTwin();
   renderCard();
   if (!model.localName) englishName(model).then(function (en) { if (en && current && current.model === model) { model.enName = en; renderLinks(); } });
 }
@@ -737,6 +847,8 @@ function effMarket() {
   var mine = S.myPrices[priceKey(m.lang, m.cardId, v.id)];
   if (mine != null) return { usd: mine, mine: true };
   if (v.price) return { usd: v.price.usd, mine: false };
+  var tp = twinPrice(current.twin);
+  if (tp != null) return { usd: tp, mine: false, twin: true };
   return { usd: null, mine: false };
 }
 
@@ -775,11 +887,20 @@ function renderPrice() {
   var src;
   if (mk.mine) src = "Your price" + (v.price ? " · catalog says " + money(v.price.usd) : "");
   else if (v.price) src = v.price.src + (v.price.updated ? " · " + new Date(v.price.updated).toLocaleDateString() : "");
-  else src = m.lang.indexOf("zh") === 0 ? "No price source for Chinese cards. Set your price below." : "No market price for this version. Set your price below.";
+  else if (mk.twin) src = S.settings.zhPct + "% of the English card: " + twinLabel(current.twin.best) + " at " + money(current.twin.best.usd) + " (TCGplayer market)";
+  else src = m.lang.indexOf("zh") === 0 ? "No English match chosen. Set your price below, or pick the English card." : "No market price for this version. Set your price below.";
+  var tw = current.twin, zh = m.lang.indexOf("zh") === 0 && !mk.mine && !v.price, twinNote = "";
+  if (zh) {
+    if (tw && tw.loading) twinNote = '<div class="src"><span class="spinner"></span> Finding the English price…</div>';
+    else if (mk.twin) twinNote = '<div class="src">' + S.settings.zhPct + "% of English " + money(tw.best.usd) + ' · <button type="button" class="linkbtn" id="twinOpen">' + (tw.chosen ? "change" : "check") + "</button></div>";
+    else if (tw && tw.none) twinNote = '<div class="src">No English card. <button type="button" class="linkbtn" id="twinOpen">Pick one</button></div>';
+    else if (tw) twinNote = '<div class="src">' + (tw.best && tw.confident ? "The English card has no price." : "No sure English match.") + ' <button type="button" class="linkbtn" id="twinOpen">Pick the English card</button></div>';
+  }
 
   var html =
     '<div class="market"><h3>Market price</h3><div class="price">' + (mk.usd != null ? money(mk.usd) : "—") + "</div>" +
-    (mk.usd == null ? '<div class="src">No market price. Open Details to set one.</div>' : "") + "</div>" +
+    (twinNote || (mk.usd == null ? '<div class="src">No market price. Type a price below, or set one in Details.</div>' : "")) + "</div>" +
+    '<div id="twinPick" class="details" hidden></div>' +
     calcHtml(mk.usd) +
     '<label class="f"><span>Quantity' + (inStock > 0 ? ' <span class="muted">· ' + inStock + " in stock</span>" : "") + '</span><div class="stepper"><button type="button" id="qMinus" aria-label="One fewer">−</button><input type="number" id="cQty" min="1" step="1" value="' + current.qty + '"><button type="button" id="qPlus" aria-label="One more">+</button></div></label>' +
     '<div class="bigbtns"><button class="bigbtn buy" type="button" id="doBuy">Buy<small id="buyTotal"></small></button>' +
@@ -796,6 +917,7 @@ function renderPrice() {
     '<div id="profitLine" class="small num"></div>' +
     '<div class="links" id="cLinks"></div></div>';
   $("pricePanel").innerHTML = html;
+  if ($("twinOpen")) $("twinOpen").addEventListener("click", openTwinPicker);
   $("cDetailsBtn").addEventListener("click", function () { S.settings.details = !S.settings.details; save(); var o = S.settings.details; $("cDetails").hidden = !o; this.setAttribute("aria-expanded", o); this.textContent = o ? "Hide details ▴" : "Details ▾"; });
 
   if (!current.dirty.buy || !current.calc) current.calc = { toks: mk.usd != null ? [mk.usd.toFixed(2)] : [], fresh: true };
@@ -903,6 +1025,7 @@ function renderLinks() {
   var name = m.lang === "en" || m.localName ? m.name : (m.enName || m.name);
   var q = ["pokemon", name, m.setId, m.localId + (m.official ? "/" + m.official : ""), LANGS[m.lang].word].filter(Boolean).join(" ");
   var html = '<a class="btn small" target="_blank" rel="noopener" href="https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(q) + '&LH_Sold=1&LH_Complete=1">eBay sold listings ↗</a>';
+  if (current.twin && current.twin.best && current.twin.best.pid && !v.price) html += '<a class="btn small" target="_blank" rel="noopener" href="https://www.tcgplayer.com/product/' + encodeURIComponent(current.twin.best.pid) + '">English on TCGplayer ↗</a>';
   if (v.price && v.price.productId) html += '<a class="btn small" target="_blank" rel="noopener" href="https://www.tcgplayer.com/product/' + encodeURIComponent(v.price.productId) + '">TCGplayer ↗</a>';
   if (m.lang !== "en") html += '<a class="btn small" target="_blank" rel="noopener" href="https://www.pricecharting.com/search-products?type=prices&q=' + encodeURIComponent(name + " " + m.localId + " " + LANGS[m.lang].word) + '">PriceCharting ↗</a>';
   $("cLinks").innerHTML = html;
@@ -1309,6 +1432,7 @@ function endShow() {
 /* ---------- settings ---------- */
 function renderSettings() {
   $("setPct").value = S.settings.buyPct;
+  $("setZhPct").value = S.settings.zhPct;
   $("setRate").value = S.settings.eurUsd;
   $("rateNote").textContent = S.settings.eurUsdDate ? "Rate from " + S.settings.eurUsdDate + "." : "";
   $("resetConfirm").hidden = true;
@@ -1316,6 +1440,7 @@ function renderSettings() {
   $("setApiKey").placeholder = getKey() ? "Saved. Type a new key to replace it" : "sk-ant-...";
   renderKeyNote();
 }
+$("setZhPct").addEventListener("change", function () { var n = num(this.value); if (n && n > 0 && n <= 200) { S.settings.zhPct = Math.round(n); save(); } else this.value = S.settings.zhPct; });
 $("setPct").addEventListener("change", function () { var n = num(this.value); if (n && n > 0 && n <= 100) { S.settings.buyPct = Math.round(n); save(); } else this.value = S.settings.buyPct; });
 $("setRate").addEventListener("change", function () { var n = num(this.value); if (n && n > 0.5 && n < 2) { S.settings.eurUsd = n; S.settings.eurUsdDate = "typed by hand"; save(); renderSettings(); } else this.value = S.settings.eurUsd; });
 function fetchRate(quiet) {
@@ -1341,7 +1466,7 @@ $("importFile").addEventListener("change", function () {
       var d = JSON.parse(rd.result);
       if (!d || !d.items || !d.tx) throw new Error("bad file");
       var b = blank();
-      S = { settings: Object.assign(b.settings, d.settings || {}), items: d.items, tx: d.tx, myPrices: d.myPrices || {}, shows: d.shows || [] };
+      S = { settings: Object.assign(b.settings, d.settings || {}), items: d.items, tx: d.tx, myPrices: d.myPrices || {}, shows: d.shows || [], twins: d.twins || {} };
       migrateNames(); save(); renderEventChip(); renderSettings();
       toast("Backup restored: " + Object.keys(S.items).length + " cards, " + S.tx.length + " entries.");
     } catch (e) { toast("That file isn't a card stand backup."); }
@@ -1713,7 +1838,8 @@ function localRecords() {
   S.tx.forEach(function (t) { if (!t.sample) r["tx|" + t.id] = t; });
   Object.keys(S.myPrices).forEach(function (k) { if (!isSampleKey("price", k)) r["price|" + k] = { v: S.myPrices[k] }; });
   (S.shows || []).forEach(function (sh) { r["show|" + sh.id] = sh; });
-  r["settings|main"] = { buyPct: S.settings.buyPct, show: S.settings.show || null, event: S.settings.event || "" };
+  Object.keys(S.twins || {}).forEach(function (k) { r["twin|" + k] = { v: S.twins[k] }; });
+  r["settings|main"] = { buyPct: S.settings.buyPct, zhPct: S.settings.zhPct, show: S.settings.show || null, event: S.settings.event || "" };
   return r;
 }
 function applyRemote(kind, id, data, deleted) {
@@ -1727,8 +1853,10 @@ function applyRemote(kind, id, data, deleted) {
     S.shows = S.shows || [];
     var j = S.shows.findIndex(function (x) { return x.id === id; });
     if (deleted) { if (j >= 0) S.shows.splice(j, 1); } else if (j >= 0) S.shows[j] = data; else S.shows.push(data);
-  } else if (kind === "settings" && !deleted && data) {
+  } else if (kind === "twin") { S.twins = S.twins || {}; if (deleted) delete S.twins[id]; else S.twins[id] = data.v; }
+  else if (kind === "settings" && !deleted && data) {
     if (data.buyPct) S.settings.buyPct = data.buyPct;
+    if (data.zhPct) S.settings.zhPct = data.zhPct;
     S.settings.show = data.show || null; S.settings.event = data.event || "";
   }
 }
