@@ -110,6 +110,14 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 .market { display: grid; gap: 2px; }
 .market .price { font: 700 34px/1 var(--font-display); font-variant-numeric: tabular-nums; }
 .market .src { font-size: 12px; color: var(--muted); }
+.showbar { display: grid; gap: 10px; margin-bottom: 16px; }
+.showbar .live { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.showbar .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--buy); box-shadow: 0 0 0 4px var(--buy-soft); flex: none; }
+.showbar .row2 { display: flex; gap: 8px; flex-wrap: wrap; }
+.showbar .row2 > * { flex: 1 1 140px; }
+.showbar .btn.go { background: var(--buy); color: var(--buy-fg); border-color: var(--buy); }
+.showbar .btn.end { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.showbar input[type=text] { width: 100%; }
 .calc { border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; gap: 8px; background: var(--surface); }
 .calc .disp { background: var(--surface-2); border-radius: 8px; padding: 6px 10px; text-align: right; min-height: 54px; display: grid; align-content: center; }
 .calc .expr { font-size: 13px; color: var(--muted); min-height: 16px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
@@ -183,13 +191,14 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
 <body>
 <header class="top"><div class="wrap">
   <h1>Keegan's Card Stand</h1>
-  <button class="event-chip" id="eventChip" type="button" title="Set the current show">No show set</button>
+  <button class="event-chip" id="eventChip" type="button" title="Current show">No show running</button>
 </div></header>
 
 <main><div class="wrap">
 
 <!-- LOOK UP -->
 <section id="v-lookup" data-view>
+  <div class="panel showbar" id="showBar"></div>
   <form class="panel" id="findForm" autocomplete="off">
     <div class="seg" id="langSeg" role="group" aria-label="Card language">
       <button type="button" data-lang="ja">Japanese</button>
@@ -259,9 +268,7 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
   <div style="display:grid;gap:16px">
     <h2>Settings</h2>
     <div class="panel">
-      <label class="f">Current show or event (tagged on every buy and sale)
-        <input type="text" id="setEvent" placeholder="e.g. Dallas Card Show, Nov 29">
-      </label>
+      <div class="small muted">Start and end shows from the top of the Look up screen. Every buy and sale in between is tagged with the show, and ending a show saves a list of them.</div>
       <label class="f">Buy offer, as % of market
         <input type="number" id="setPct" min="1" max="100" step="1">
       </label>
@@ -394,7 +401,7 @@ var DAY = 86400000;
 
 /* ---------- storage ---------- */
 function blank() {
-  return { settings: { buyPct: 70, eurUsd: 1.09, eurUsdDate: "", event: "", lang: "ja" }, items: {}, tx: [], myPrices: {} };
+  return { settings: { buyPct: 70, eurUsd: 1.09, eurUsdDate: "", event: "", show: null, lang: "ja" }, items: {}, tx: [], myPrices: {}, shows: [] };
 }
 function load() {
   try {
@@ -403,7 +410,7 @@ function load() {
       var s = JSON.parse(raw);
       var b = blank();
       s.settings = Object.assign(b.settings, s.settings || {});
-      s.items = s.items || {}; s.tx = s.tx || []; s.myPrices = s.myPrices || {};
+      s.items = s.items || {}; s.tx = s.tx || []; s.myPrices = s.myPrices || {}; s.shows = s.shows || [];
       return s;
     }
   } catch (e) {}
@@ -470,8 +477,8 @@ function show(view) {
   window.scrollTo(0, 0);
 }
 document.querySelectorAll("nav.tabs button").forEach(function (b) { b.addEventListener("click", function () { show(b.dataset.tab); }); });
-$("eventChip").addEventListener("click", function () { show("settings"); setTimeout(function () { $("setEvent").focus(); }, 50); });
-function renderEventChip() { $("eventChip").textContent = S.settings.event ? S.settings.event : "No show set"; }
+$("eventChip").addEventListener("click", function () { show("lookup"); });
+function renderEventChip() { $("eventChip").textContent = S.settings.show ? "● " + S.settings.show.name : "No show running"; renderShowBar(); }
 
 /* ---------- catalog ---------- */
 var setsByLang = {};
@@ -877,7 +884,7 @@ function ensureItem() {
 function record(type, unit) {
   var q = current.qty, it = ensureItem(), before = snapshotOf(it), now = Date.now(), mk = effMarket();
   var tx = { id: uid(), ts: now, type: type, key: it.key, name: it.name, localName: it.localName || "", lang: it.lang, setId: it.setId, localId: it.localId, variantLabel: it.variantLabel, cond: it.cond,
-    qty: q, unit: unit, market: mk.usd, event: S.settings.event || "", before: before };
+    qty: q, unit: unit, market: mk.usd, event: S.settings.event || "", showId: S.settings.show ? S.settings.show.id : "", before: before };
   if (type === "buy") {
     if (it.qty <= 0) it.firstIn = now;
     it.qty += q; it.cost += unit * q; it.lastIn = now;
@@ -906,12 +913,14 @@ function undoTx(id) {
   toast("Undone.");
   if (current && !$("v-lookup").hidden && $("pricePanel")) renderPrice();
   if (!$("v-log").hidden) renderLog();
+  if (showUi.mode !== "naming") renderShowBar();
 }
 
 function doBuy() {
   var unit = calcValue();
   if (unit == null || unit < 0) { toast("Use the calculator to enter what you're paying per card."); return; }
   var t = record("buy", unit);
+  if (showUi.mode !== "naming") renderShowBar();
   toast("Bought " + t.qty + " × " + t.name + " for " + money(unit * t.qty), function () { undoTx(t.id); });
   current.dirty = { buy: false, sell: false }; current.qty = 1; renderPrice();
 }
@@ -919,6 +928,7 @@ function doSell() {
   var unit = calcValue();
   if (unit == null || unit < 0) { toast("Use the calculator to enter the sale price per card."); return; }
   var t = record("sell", unit);
+  if (showUi.mode !== "naming") renderShowBar();
   toast("Sold " + t.qty + " × " + t.name + " · profit " + money(t.profit), function () { undoTx(t.id); });
   current.dirty = { buy: false, sell: false }; current.qty = 1; renderPrice();
 }
@@ -1032,7 +1042,7 @@ function renderReports() {
   if (events.length) {
     html += '<select id="repEvent" aria-label="Pick a show">' + events.map(function (e) { return "<option" + (e === reportEvent ? " selected" : "") + ">" + esc(e) + "</option>"; }).join("") + "</select>";
     html += statsHTML(summarize(S.tx.filter(function (t) { return (t.event || "(no show set)") === reportEvent; })));
-  } else html += '<div class="notice">Set the current show in Settings, and buys and sales get grouped by show here.</div>';
+  } else html += '<div class="notice">Tap Start show on the Look up screen, and buys and sales get grouped by show here.</div>';
   html += "</div>";
   html += '<div class="panel"><h3>All time</h3>' + statsHTML(summarize(S.tx)) + "</div>";
   html += '<div class="panel"><h3>Stock on hand</h3><div class="stats">' +
@@ -1049,9 +1059,109 @@ function renderReports() {
   if ($("repEvent")) $("repEvent").addEventListener("change", function () { reportEvent = this.value; renderReports(); });
 }
 
+/* ---------- shows: start, end, and the list saved at the end ---------- */
+function localDay(ts) { var d = new Date(ts); return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
+function fileSafe(t) { return String(t).replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 40) || "show"; }
+function backupFile() {
+  var data = JSON.stringify(Object.assign({ app: "keegan-card-stand", exportedAt: new Date().toISOString() }, S), null, 1);
+  return new File([data], "card-stand-backup-" + localDay(Date.now()) + ".json", { type: "application/json" });
+}
+function downloadFile(f) {
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(f); a.download = f.name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 10000);
+}
+function showTx(sh) { return S.tx.filter(function (t) { return t.showId === sh.id; }); }
+function csvCell(v) { v = v == null ? "" : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+function showCsvFile(sh) {
+  var txs = showTx(sh).slice().sort(function (a, b) { return a.ts - b.ts; });
+  var rows = [["Date", "Time", "Type", "Card", "Printed name", "Language", "Set", "Number", "Version", "Condition", "Qty", "Price each", "Total", "Market each", "Profit"]];
+  txs.forEach(function (t) {
+    rows.push([localDay(t.ts), timeLabel(t.ts), t.type === "buy" ? "Buy" : "Sell", t.name, t.localName || "", (LANGS[t.lang] || {}).label || t.lang, t.setId, t.localId, t.variantLabel, t.cond,
+      t.qty, t.unit.toFixed(2), (t.unit * t.qty).toFixed(2), t.market != null ? t.market.toFixed(2) : "", t.type === "sell" && t.profit != null ? t.profit.toFixed(2) : ""]);
+  });
+  var r = summarize(txs);
+  rows.push([]);
+  rows.push(["Show", sh.name]);
+  rows.push(["Started", localDay(sh.start) + " " + timeLabel(sh.start)]);
+  rows.push(["Ended", sh.end ? localDay(sh.end) + " " + timeLabel(sh.end) : ""]);
+  rows.push(["Cards sold", r.sold, "Sales", r.revenue.toFixed(2)]);
+  rows.push(["Cards bought", r.bought, "Spent", r.spent.toFixed(2)]);
+  rows.push(["Profit on sales", r.profit.toFixed(2)]);
+  var csv = "﻿" + rows.map(function (row) { return row.map(csvCell).join(","); }).join("\r\n");
+  return new File([csv], "show-" + localDay(sh.start) + "-" + fileSafe(sh.name) + ".csv", { type: "text/csv" });
+}
+// Saves the show list and a full backup: the share sheet on phones (Save to Files, AirDrop, email), downloads elsewhere.
+function saveShowFiles(sh) {
+  var files = [showCsvFile(sh), backupFile()];
+  if (navigator.canShare && navigator.share && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) && navigator.canShare({ files: files })) {
+    return navigator.share({ files: files, title: sh.name }).then(function () { return true; }, function () { return false; });
+  }
+  files.forEach(function (f, i) { setTimeout(function () { downloadFile(f); }, i * 400); });
+  return Promise.resolve(true);
+}
+var showUi = { mode: "", lastEnded: null };
+function renderShowBar() {
+  var bar = $("showBar"); if (!bar) return;
+  var sh = S.settings.show, html;
+  if (sh) {
+    var r = summarize(showTx(sh));
+    if (showUi.mode === "confirmEnd") {
+      html = '<div class="live"><span class="dot"></span>End ' + esc(sh.name) + "?</div>" +
+        '<div class="small">' + r.sold + " sold for " + money(r.revenue) + " · " + r.bought + " bought for " + money(r.spent) + " · profit " + money(r.profit) + "</div>" +
+        '<div class="small muted">This saves a list of the show’s buys and sales and a full backup. On a phone, pick Save to Files (or email it to yourself).</div>' +
+        '<div class="row2"><button class="btn" type="button" id="showCancel">Keep going</button><button class="btn end" type="button" id="showEndYes">End show and save list</button></div>';
+    } else {
+      html = '<div class="live"><span class="dot"></span><span style="min-width:0;overflow-wrap:anywhere">' + esc(sh.name) + "</span></div>" +
+        '<div class="small muted">Started ' + (localDay(sh.start) === localDay(Date.now()) ? "" : dateLabel(sh.start) + " ") + timeLabel(sh.start) + " · " + r.sold + " sold (" + money(r.revenue) + ") · " + r.bought + " bought (" + money(r.spent) + ") · profit " + money(r.profit) + "</div>" +
+        '<div class="row2"><button class="btn end" type="button" id="showEnd">End show</button></div>';
+    }
+  } else if (showUi.mode === "naming") {
+    html = '<label class="f">Show name<input type="text" id="showName" maxlength="60" value="' + esc("Show " + new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })) + '"></label>' +
+      '<div class="row2"><button class="btn" type="button" id="showCancel">Cancel</button><button class="btn go" type="button" id="showStartYes">Start show</button></div>';
+  } else {
+    html = '<div class="row2"><button class="btn go" type="button" id="showStart">Start show</button></div>';
+    if (showUi.lastEnded) {
+      var le = showUi.lastEnded;
+      html = '<div class="small"><b>' + esc(le.name) + "</b> ended. If the files didn’t save, save them again:</div>" +
+        '<div class="row2"><button class="btn small" type="button" id="showResave">Save list and backup again</button><button class="btn small" type="button" id="showDismiss">Done</button></div>' + html;
+    }
+  }
+  bar.innerHTML = html;
+  function on(id, fn) { if ($(id)) $(id).addEventListener("click", fn); }
+  on("showStart", function () { showUi.mode = "naming"; showUi.lastEnded = null; renderShowBar(); var i = $("showName"); i.focus(); i.select(); });
+  on("showCancel", function () { showUi.mode = ""; renderShowBar(); });
+  on("showStartYes", startShow);
+  if ($("showName")) $("showName").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); startShow(); } });
+  on("showEnd", function () { showUi.mode = "confirmEnd"; renderShowBar(); });
+  on("showEndYes", endShow);
+  on("showResave", function () { saveShowFiles(showUi.lastEnded); });
+  on("showDismiss", function () { showUi.lastEnded = null; renderShowBar(); });
+}
+function startShow() {
+  var name = ($("showName").value || "").trim() || "Show " + localDay(Date.now());
+  // keep show names unique so reports don't mix two shows with the same name
+  var used = {}; S.tx.forEach(function (t) { if (t.event) used[t.event] = 1; }); (S.shows || []).forEach(function (x) { used[x.name] = 1; });
+  if (used[name]) { var n = 2; while (used[name + " (" + n + ")"]) n++; name = name + " (" + n + ")"; }
+  S.settings.show = { id: uid(), name: name, start: Date.now() };
+  S.settings.event = name;
+  showUi.mode = ""; save(); renderEventChip();
+  toast("Show started: " + name + ". Every buy and sale is tagged with it until you end it.");
+}
+function endShow() {
+  var sh = Object.assign({}, S.settings.show, { end: Date.now() });
+  var r = summarize(showTx(sh));
+  S.shows = S.shows || [];
+  S.shows.push({ id: sh.id, name: sh.name, start: sh.start, end: sh.end, sold: r.sold, revenue: r.revenue, bought: r.bought, spent: r.spent, profit: r.profit });
+  S.settings.show = null; S.settings.event = "";
+  showUi.mode = ""; showUi.lastEnded = sh;
+  save(); renderEventChip();
+  saveShowFiles(sh).then(function (ok) { toast(ok ? "Show ended. List and backup saved." : "Show ended. The files weren’t saved. Tap “Save list and backup again”."); });
+}
+
 /* ---------- settings ---------- */
 function renderSettings() {
-  $("setEvent").value = S.settings.event;
   $("setPct").value = S.settings.buyPct;
   $("setRate").value = S.settings.eurUsd;
   $("rateNote").textContent = S.settings.eurUsdDate ? "Rate from " + S.settings.eurUsdDate + "." : "";
@@ -1060,7 +1170,6 @@ function renderSettings() {
   $("setApiKey").placeholder = getKey() ? "Saved. Type a new key to replace it" : "sk-ant-...";
   renderKeyNote();
 }
-$("setEvent").addEventListener("change", function () { S.settings.event = this.value.trim(); save(); renderEventChip(); toast(S.settings.event ? "Show set to " + S.settings.event : "Show cleared"); });
 $("setPct").addEventListener("change", function () { var n = num(this.value); if (n && n > 0 && n <= 100) { S.settings.buyPct = Math.round(n); save(); } else this.value = S.settings.buyPct; });
 $("setRate").addEventListener("change", function () { var n = num(this.value); if (n && n > 0.5 && n < 2) { S.settings.eurUsd = n; S.settings.eurUsdDate = "typed by hand"; save(); renderSettings(); } else this.value = S.settings.eurUsd; });
 function fetchRate(quiet) {
@@ -1070,11 +1179,7 @@ function fetchRate(quiet) {
 }
 $("rateBtn").addEventListener("click", function () { fetchRate(false); });
 $("exportBtn").addEventListener("click", function () {
-  var data = JSON.stringify(Object.assign({ app: "keegan-card-stand", exportedAt: new Date().toISOString() }, S), null, 1);
-  var a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([data], { type: "application/json" }));
-  a.download = "card-stand-backup-" + new Date().toISOString().slice(0, 10) + ".json";
-  document.body.appendChild(a); a.click(); a.remove();
+  downloadFile(backupFile());
   toast("Backup downloaded.");
 });
 $("importFile").addEventListener("change", function () {
@@ -1085,7 +1190,7 @@ $("importFile").addEventListener("change", function () {
       var d = JSON.parse(rd.result);
       if (!d || !d.items || !d.tx) throw new Error("bad file");
       var b = blank();
-      S = { settings: Object.assign(b.settings, d.settings || {}), items: d.items, tx: d.tx, myPrices: d.myPrices || {} };
+      S = { settings: Object.assign(b.settings, d.settings || {}), items: d.items, tx: d.tx, myPrices: d.myPrices || {}, shows: d.shows || [] };
       migrateNames(); save(); renderEventChip(); renderSettings();
       toast("Backup restored: " + Object.keys(S.items).length + " cards, " + S.tx.length + " entries.");
     } catch (e) { toast("That file isn't a card stand backup."); }
@@ -1315,6 +1420,7 @@ $("sampleRemove").addEventListener("click", function () { removeSampleData(false
 
 /* ---------- start ---------- */
 migrateNames();
+if (!S.settings.show && S.settings.event) { S.settings.event = ""; save(); }
 setLang(S.settings.lang || "ja");
 renderEventChip();
 if (!S.settings.eurUsdDate || S.settings.eurUsdDate !== new Date().toISOString().slice(0, 10)) fetchRate(true);
