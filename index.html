@@ -705,7 +705,12 @@ function loadTwin() {
     if (!current || current.model !== m) return;
     current.twin = t || { list: [] };
     if (!current.dirty.buy) current.calc = null;
-    if ($("pricePanel")) renderPrice();
+    // a sure match also gives the full English name, e.g. "Iono's Wattrel" or "Wellspring Mask Ogerpon ex"
+    var en = t && t.confident && t.best ? t.best.name : "";
+    if (en && en !== m.name && (!m.localName || en.indexOf(m.name.replace(/ (ex|EX|GX|V|VMAX|VSTAR)$/, "")) >= 0)) {
+      if (!m.localName) m.localName = m.name;
+      m.name = en; renderCard();
+    } else if ($("pricePanel")) renderPrice();
   });
 }
 function twinLabel(c) { return c.name + " · " + (c.set ? c.set + " " : "") + "#" + c.localId + (c.official ? "/" + c.official : ""); }
